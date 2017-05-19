@@ -95,6 +95,19 @@ exports.types.ref = function (options) {
     };
 };
 
+exports.types.boolean = function (options) {
+    return function (o, boolean, done) {
+        o = options.field || o
+        if (!boolean) {
+            return done(unprocessableEntity('\'%s\' needs to be specified', o));
+        }
+        if (typeof boolean !== 'boolean' && !(boolean instanceof Boolean)) {
+            return done(unprocessableEntity('\'%s\' needs to be a boolean', o));
+        }
+        done()
+    };
+};
+
 exports.types.url = function (options) {
     return function (o, url, done) {
         if (!url || url.length > 2000 || (url.indexOf('http://') === -1 && url.indexOf('https://') === -1)) {
@@ -105,6 +118,24 @@ exports.types.url = function (options) {
 };
 
 exports.types.name = function (options) {
+    return function (o, name, done) {
+        done()
+    };
+};
+
+exports.types.title = function (options) {
+    return function (o, name, done) {
+        done()
+    };
+};
+
+exports.types.contacts = function (options) {
+    return function (o, name, done) {
+        done()
+    };
+};
+
+exports.types.date = function (options) {
     return function (o, name, done) {
         done()
     };
