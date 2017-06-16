@@ -6,7 +6,6 @@ var stream = require('stream');
 var _ = require('lodash');
 var tmp = require('tmp');
 var mongoose = require('mongoose');
-// var formida = require('formida');
 var formidable = require('formidable')
 
 var serand = require('serand');

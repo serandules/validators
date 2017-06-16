@@ -9,7 +9,7 @@
     "dependencies": {
         "logger": "serandules/logger#master",
         "lodash": "4.17.4",
-        "tmp": "0.0.31"
+        "formidable": "1.1.1"
     },
     "repository": {
         "type": "git",
