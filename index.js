@@ -31,6 +31,8 @@ exports.types = {};
 
 exports.contents = {};
 
+exports.resources = {};
+
 exports.types.string = function (options) {
     options = options || {}
     return function (o, done) {
@@ -401,7 +403,7 @@ exports.contents.multipart = function (req, res, done) {
     form.parse(req);
 };
 
-exports.pre = function (options, req, res, next) {
+exports.create = function (options, req, res, next) {
     var content = options.content || 'json';
     var validate = exports.contents[content];
     validate(req, res, function (err) {
@@ -442,4 +444,27 @@ exports.pre = function (options, req, res, next) {
             notify(res, err);
         });
     });
+};
+
+exports.find = function (options, req, res, next) {
+    var data = req.query.data || '{}';
+    try {
+        data = JSON.parse(data);
+    } catch (e) {
+        return res.pond(errors.badRequest('\'data\' contains an invalid value'));
+    }
+    var paging = data.paging || {};
+    if (paging.count > 100) {
+        return res.pond(errors.badRequest('\'paging.count\' contains an invalid value'))
+    }
+    req.query.data = {
+        paging: {
+            start: paging.start || 0,
+            count: paging.count || 20,
+            sort: paging.sort
+        },
+        query: data.query || {},
+        fields: data.fields || {}
+    };
+    next();
 };
