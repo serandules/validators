@@ -457,7 +457,7 @@ exports.find = function (options, req, res, next) {
     if (paging.count > 100) {
         return res.pond(errors.badRequest('\'paging.count\' contains an invalid value'))
     }
-    req.query.data = {
+    data = {
         paging: {
             start: paging.start || 0,
             count: paging.count || 20,
@@ -466,5 +466,25 @@ exports.find = function (options, req, res, next) {
         query: data.query || {},
         fields: data.fields || {}
     };
-    next();
+    var model = options.model;
+    var schema = model.schema;
+    var paths = schema.paths;
+    var query = data.query;
+    async.eachLimit(Object.keys(query), 1, function (field, validated) {
+        var path = paths[field];
+        if (!path) {
+            return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+        }
+        var options = path.options || {};
+        if (!options.searchable) {
+            return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+        }
+        validated();
+    }, function (err) {
+        if (err) {
+            return notify(res, err);
+        }
+        req.query.data = data;
+        next();
+    });
 };
