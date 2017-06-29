@@ -446,6 +446,10 @@ exports.create = function (options, req, res, next) {
     });
 };
 
+exports.update = function (options, req, res, next) {
+    exports.create(options, req, res, next);
+};
+
 exports.find = function (options, req, res, next) {
     var data = req.query.data || '{}';
     try {
@@ -478,6 +482,9 @@ exports.find = function (options, req, res, next) {
         var options = path.options || {};
         if (!options.searchable) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+        }
+        if (!options.index) {
+            return res.pond(errors.serverError());
         }
         validated();
     }, function (err) {
