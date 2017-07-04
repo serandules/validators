@@ -480,7 +480,7 @@ exports.find = function (options, req, res, next) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
         }
         var options = path.options || {};
-        if (!options.searchable) {
+        if (!options.searchable && !options.sortable) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
         }
         if (!options.index) {
