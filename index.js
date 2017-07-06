@@ -465,33 +465,65 @@ exports.find = function (options, req, res, next) {
         paging: {
             start: paging.start || 0,
             count: paging.count || 20,
-            sort: paging.sort
+            sort: paging.sort || {createdAt: -1}
         },
         query: data.query || {},
         fields: data.fields || {}
     };
+    req.query.data = data;
     var model = options.model;
     var schema = model.schema;
     var paths = schema.paths;
     var query = data.query;
-    async.eachLimit(Object.keys(query), 1, function (field, validated) {
-        var path = paths[field];
+    // console.log(schema.compounds)
+    var i;
+    var field;
+    var path;
+    var o;
+    var fields = Object.keys(query);
+    var length = fields.length;
+    for (i = 0; i < length; i++) {
+        field = fields[i];
+        path = paths[field];
         if (!path) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
         }
-        var options = path.options || {};
-        if (!options.searchable && !options.sortable) {
+        o = path.options || {};
+        if (!o.searchable && !o.sortable) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
         }
-        if (!options.index) {
-            return res.pond(errors.serverError());
+    }
+    var value;
+    var sorter;
+    var sort = data.paging.sort;
+    var sorters = Object.keys(sort);
+    length = sorters.length;
+    for (i = 0; i < length; i++) {
+        sorter = sorters[i];
+        value = sort[sorter];
+        if (value !== -1 && value !== 1) {
+            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
         }
-        validated();
-    }, function (err) {
-        if (err) {
-            return notify(res, err);
+        path = paths[sorter];
+        if (!path) {
+            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
         }
-        req.query.data = data;
-        next();
-    });
+        o = path.options || {};
+        if (!o.sortable) {
+            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+        }
+    }
+    if (length === 1) {
+        return next();
+    }
+    var compound;
+    var compounds = schema.compounds;
+    length = compounds.length;
+    for (i = 0; i < length; i++) {
+        compound = compounds[i];
+        if (!_.isEqual(sorters, Object.keys(compound))) {
+            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+        }
+    }
+    next();
 };
