@@ -457,34 +457,46 @@ exports.find = function (options, req, res, next) {
     } catch (e) {
         return res.pond(errors.badRequest('\'data\' contains an invalid value'));
     }
-    var paging = data.paging || {};
-    if (paging.count > 100) {
-        return res.pond(errors.badRequest('\'paging.count\' contains an invalid value'))
-    }
-    data = {
-        paging: {
-            start: paging.start || 0,
-            count: paging.count || 20,
-            sort: paging.sort || {createdAt: -1}
-        },
-        query: data.query || {},
-        fields: data.fields || {}
-    };
     req.query.data = data;
+    validateQuery(options, req, res, function (err) {
+        if (err) {
+            return next(err);
+        }
+        validatePaging(options, req, res, function (err) {
+            if (err) {
+                return next(err);
+            }
+            validateFields(options, req, res, function (err) {
+                if (err) {
+                    return next(err);
+                }
+                validateCompounds(options, req, res, next);
+            });
+        });
+    });
+};
+
+var validateQuery = function (options, req, res, next) {
+    var data = req.query.data;
+    var query = data.query;
+    if (!query) {
+        data.query = {};
+        return next();
+    }
+    if (typeof query !== 'object') {
+        return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+    }
+    var o;
+    var path;
+    var filter;
     var model = options.model;
     var schema = model.schema;
     var paths = schema.paths;
-    var query = data.query;
-    // console.log(schema.compounds)
-    var i;
-    var field;
-    var path;
-    var o;
-    var fields = Object.keys(query);
-    var length = fields.length;
-    for (i = 0; i < length; i++) {
-        field = fields[i];
-        path = paths[field];
+    for (filter in query) {
+        if (!query.hasOwnProperty(filter)) {
+            continue;
+        }
+        path = paths[filter];
         if (!path) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
         }
@@ -493,16 +505,40 @@ exports.find = function (options, req, res, next) {
             return res.pond(errors.badRequest('\'query\' contains an invalid value'));
         }
     }
+    next();
+};
+
+var validatePaging = function (options, req, res, next) {
+    var o;
+    var path;
     var value;
     var sorter;
-    var sort = data.paging.sort;
-    var sorters = Object.keys(sort);
-    length = sorters.length;
-    for (i = 0; i < length; i++) {
-        sorter = sorters[i];
+    var model = options.model;
+    var schema = model.schema;
+    var paths = schema.paths;
+    var data = req.query.data;
+    var paging = data.paging || {};
+    paging.count = paging.count || 20;
+    if (paging.count > 100) {
+        return res.pond(errors.badRequest('\'paging.count\' contains an invalid value'))
+    }
+    var sort = paging.sort || {createdAt: -1, id: 1};
+    if (typeof sort !== 'object') {
+        return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+    }
+    var clone = {};
+    for (sorter in sort) {
+        if (!sort.hasOwnProperty(sorter)) {
+            continue;
+        }
         value = sort[sorter];
         if (value !== -1 && value !== 1) {
             return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+        }
+        if (sorter === 'id') {
+            sorter = '_id';
+            clone[sorter] = value;
+            continue;
         }
         path = paths[sorter];
         if (!path) {
@@ -512,18 +548,131 @@ exports.find = function (options, req, res, next) {
         if (!o.sortable) {
             return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
         }
+        clone[sorter] = value;
     }
-    if (length === 1) {
+    if (!clone._id) {
+        clone['_id'] = 1;
+    }
+    paging.sort = clone;
+    data.paging = paging;
+    validateCursor(options, req, res, next);
+};
+
+// TODO: validate passing non-id values in place of id values
+
+var validateCursor = function (options, req, res, next) {
+    var data = req.query.data;
+    var paging = data.paging;
+    var cursor = paging.cursor;
+    if (!cursor) {
         return next();
     }
+    if (!cursor.max && !cursor.min) {
+        return res.pond(errors.badRequest('\'cursor\' contains an invalid value'));
+    }
+    var path;
+    var value;
+    var model = options.model;
+    var schema = model.schema;
+    var paths = schema.paths;
+    var fields = cursor.max || cursor.min;
+    async.eachLimit(Object.keys(fields), 1, function (field, validated) {
+        if (field === 'id') {
+            field = '_id';
+            fields._id = fields.id;
+            delete fields.id;
+        }
+        path = paths[field];
+        if (!path) {
+            return validated(errors.badRequest('\'cursor\' contains an invalid value'));
+        }
+        value = fields[field];
+        if (!value) {
+            return validated(errors.badRequest('\'cursor.%s\' + contains an invalid value', field));
+        }
+        var options = path.options || {};
+        var o = {
+            path: path,
+            field: field,
+            value: value,
+            options: {}
+        };
+        var validator = options.validator;
+        if (!validator) {
+            return validated();
+        }
+        validator(o, function (err) {
+            if (err) {
+                return validated(errors.badRequest('cursor.%s', err.message));
+            }
+            validated();
+        });
+    }, function (err) {
+        if (err) {
+            return res.pond(err);
+        }
+        next();
+    });
+};
+
+var validateFields = function (options, req, res, next) {
+    var data = req.query.data;
+    var fields = data.fields;
+    if (!fields) {
+        return next();
+    }
+    var field;
+    var path;
+    var value;
+    var model = options.model;
+    var schema = model.schema;
+    var paths = schema.paths;
+    for (field in fields) {
+        if (!fields.hasOwnProperty(field)) {
+            continue;
+        }
+        path = paths[field];
+        if (!path) {
+            return res.pond(errors.badRequest('\'fields\' contains an invalid value'));
+        }
+        value = fields[field];
+        if (value !== 1) {
+            return res.pond(errors.badRequest('\'fields\' contains an invalid value'));
+        }
+    }
+    next();
+};
+
+var validateCompounds = function (options, req, res, next) {
+    var i;
+    var index;
     var compound;
+    var data = req.query.data;
+    var sort = data.paging.sort;
+    var cursor = data.paging.cursor;
+    var model = options.model;
+    var schema = model.schema;
     var compounds = schema.compounds;
-    length = compounds.length;
+    var length = compounds.length;
+    var clone = _.cloneDeep(sort);
+    // ignore first field ordering
+    clone[Object.keys(clone)[0]] = 1;
     for (i = 0; i < length; i++) {
         compound = compounds[i];
-        if (!_.isEqual(sorters, Object.keys(compound))) {
-            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+        if (_.isEqual(clone, compound)) {
+            index = compound;
+            break;
         }
+    }
+    if (!index) {
+        return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+    }
+    if (!cursor) {
+        return next();
+    }
+    var fields = cursor.max || cursor.min;
+    if (_.isEqual(index, Object.keys(fields))) {
+        return res.pond(errors.badRequest('\'cursor\' contains an invalid value'));
     }
     next();
 };
