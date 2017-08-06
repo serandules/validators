@@ -10,6 +10,7 @@ var formidable = require('formidable')
 
 var serand = require('serand');
 var errors = require('errors');
+var mongutils = require('mongutils');
 
 var format = function () {
     return util.format.apply(util.format, Array.prototype.slice.call(arguments));
@@ -458,33 +459,26 @@ exports.find = function (options, req, res, next) {
         return res.pond(errors.badRequest('\'data\' contains an invalid value'));
     }
     req.query.data = data;
-    validateQuery(options, req, res, function (err) {
+    data.count = data.count || 20;
+    if (data.count > 100) {
+        return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
+    }
+    validatePaging(options, req, res, function (err) {
         if (err) {
             return next(err);
         }
-        validatePaging(options, req, res, function (err) {
-            if (err) {
-                return next(err);
-            }
-            validateFields(options, req, res, function (err) {
-                if (err) {
-                    return next(err);
-                }
-                validateCompounds(options, req, res, next);
-            });
-        });
+        validateFields(options, req, res, next);
     });
 };
 
-var validateQuery = function (options, req, res, next) {
-    var data = req.query.data;
-    var query = data.query;
+var validateQuery = function (options, paging, res, next) {
+    var query = paging.query;
     if (!query) {
-        data.query = {};
+        paging.query = {};
         return next();
     }
     if (typeof query !== 'object') {
-        return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+        return res.pond(errors.badRequest('\'paging.query\' contains an invalid value'));
     }
     var o;
     var path;
@@ -498,17 +492,17 @@ var validateQuery = function (options, req, res, next) {
         }
         path = paths[filter];
         if (!path) {
-            return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'paging.query\' contains an invalid value'));
         }
         o = path.options || {};
         if (!o.searchable && !o.sortable) {
-            return res.pond(errors.badRequest('\'query\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'paging.query\' contains an invalid value'));
         }
     }
     next();
 };
 
-var validatePaging = function (options, req, res, next) {
+var validateSort = function (options, paging, res, next) {
     var o;
     var path;
     var value;
@@ -516,15 +510,9 @@ var validatePaging = function (options, req, res, next) {
     var model = options.model;
     var schema = model.schema;
     var paths = schema.paths;
-    var data = req.query.data;
-    var paging = data.paging || {};
-    paging.count = paging.count || 20;
-    if (paging.count > 100) {
-        return res.pond(errors.badRequest('\'paging.count\' contains an invalid value'))
-    }
-    var sort = paging.sort || {createdAt: -1, id: 1};
+    var sort = paging.sort || {createdAt: -1, id: -1};
     if (typeof sort !== 'object') {
-        return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+        return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
     }
     var clone = {};
     for (sorter in sort) {
@@ -533,7 +521,7 @@ var validatePaging = function (options, req, res, next) {
         }
         value = sort[sorter];
         if (value !== -1 && value !== 1) {
-            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
         }
         if (sorter === 'id') {
             sorter = '_id';
@@ -542,53 +530,64 @@ var validatePaging = function (options, req, res, next) {
         }
         path = paths[sorter];
         if (!path) {
-            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
         }
         o = path.options || {};
         if (!o.sortable) {
-            return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
         }
         clone[sorter] = value;
     }
+    if (!clone.createdAt) {
+        clone.createdAt = -1
+    }
     if (!clone._id) {
-        clone['_id'] = 1;
+        clone['_id'] = clone.createdAt;
     }
     paging.sort = clone;
-    data.paging = paging;
-    validateCursor(options, req, res, next);
+    validateCompounds(options, paging, res, next);
+};
+
+var validatePaging = function (options, req, res, next) {
+    var data = req.query.data;
+    var paging = data.paging || (data.paging = {});
+    validateQuery(options, paging, res, function (err) {
+        if (err) {
+            return next(err);
+        }
+        validateSort(options, paging, res, function (err) {
+            if (err) {
+                return next(err);
+            }
+            validateCursor(options, paging, res, next);
+        });
+    });
 };
 
 // TODO: validate passing non-id values in place of id values
-
-var validateCursor = function (options, req, res, next) {
-    var data = req.query.data;
-    var paging = data.paging;
+var validateCursor = function (options, paging, res, next) {
     var cursor = paging.cursor;
     if (!cursor) {
         return next();
-    }
-    if (!cursor.max && !cursor.min) {
-        return res.pond(errors.badRequest('\'cursor\' contains an invalid value'));
     }
     var path;
     var value;
     var model = options.model;
     var schema = model.schema;
     var paths = schema.paths;
-    var fields = cursor.max || cursor.min;
-    async.eachLimit(Object.keys(fields), 1, function (field, validated) {
+    async.eachLimit(Object.keys(cursor), 1, function (field, validated) {
         if (field === 'id') {
             field = '_id';
-            fields._id = fields.id;
-            delete fields.id;
+            cursor._id = cursor.id;
+            delete cursor.id;
         }
         path = paths[field];
         if (!path) {
-            return validated(errors.badRequest('\'cursor\' contains an invalid value'));
+            return validated(errors.badRequest('\'paging.cursor\' contains an invalid value'));
         }
-        value = fields[field];
+        value = cursor[field];
         if (!value) {
-            return validated(errors.badRequest('\'cursor.%s\' + contains an invalid value', field));
+            return validated(errors.badRequest('\'paging.cursor.%s\' + contains an invalid value', field));
         }
         var options = path.options || {};
         var o = {
@@ -603,7 +602,7 @@ var validateCursor = function (options, req, res, next) {
         }
         validator(o, function (err) {
             if (err) {
-                return validated(errors.badRequest('cursor.%s', err.message));
+                return validated(errors.badRequest('paging.cursor.%s', err.message));
             }
             validated();
         });
@@ -611,6 +610,7 @@ var validateCursor = function (options, req, res, next) {
         if (err) {
             return res.pond(err);
         }
+        mongutils.cast(options.model, cursor);
         next();
     });
 };
@@ -643,36 +643,29 @@ var validateFields = function (options, req, res, next) {
     next();
 };
 
-var validateCompounds = function (options, req, res, next) {
+var validateCompounds = function (options, paging, res, next) {
     var i;
     var index;
     var compound;
-    var data = req.query.data;
-    var sort = data.paging.sort;
-    var cursor = data.paging.cursor;
+    var sort = paging.sort;
     var model = options.model;
     var schema = model.schema;
     var compounds = schema.compounds;
     var length = compounds.length;
-    var clone = _.cloneDeep(sort);
-    // ignore first field ordering
-    clone[Object.keys(clone)[0]] = 1;
+    var first = mongutils.first(sort);
+    if (sort[first] === -1) {
+        sort = mongutils.invert(sort);
+    }
     for (i = 0; i < length; i++) {
         compound = compounds[i];
-        if (_.isEqual(clone, compound)) {
+        if (_.isEqual(sort, compound)) {
             index = compound;
             break;
         }
     }
     if (!index) {
-        return res.pond(errors.badRequest('\'sort\' contains an invalid value'));
+        return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
     }
-    if (!cursor) {
-        return next();
-    }
-    var fields = cursor.max || cursor.min;
-    if (_.isEqual(index, Object.keys(fields))) {
-        return res.pond(errors.badRequest('\'cursor\' contains an invalid value'));
-    }
+    paging.index = index;
     next();
 };
