@@ -452,23 +452,40 @@ exports.update = function (options, req, res, next) {
 };
 
 exports.find = function (options, req, res, next) {
-    var data = req.query.data || '{}';
+    validateData(options, req, res, function (err) {
+        if (err) {
+            return next(err);
+        }
+        var data = req.query.data;
+        data.count = data.count || 20;
+        if (data.count > 100) {
+            return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
+        }
+        validatePaging(options, req, res, function (err) {
+            if (err) {
+                return next(err);
+            }
+            validateFields(options, req, res, next);
+        });
+    });
+};
+
+var validateData = function (options, req, res, next) {
+    var data = req.query.data;
+    if (!data) {
+        req.query.data = {};
+        return next();
+    }
     try {
         data = JSON.parse(data);
     } catch (e) {
         return res.pond(errors.badRequest('\'data\' contains an invalid value'));
     }
-    req.query.data = data;
-    data.count = data.count || 20;
-    if (data.count > 100) {
-        return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
+    if (typeof data !== 'object') {
+        return res.pond(errors.badRequest('\'data\' contains an invalid value'));
     }
-    validatePaging(options, req, res, function (err) {
-        if (err) {
-            return next(err);
-        }
-        validateFields(options, req, res, next);
-    });
+    req.query.data = data;
+    next();
 };
 
 var validateQuery = function (options, paging, res, next) {
