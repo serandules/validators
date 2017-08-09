@@ -461,13 +461,42 @@ exports.find = function (options, req, res, next) {
         if (data.count > 100) {
             return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
         }
-        validatePaging(options, req, res, function (err) {
+        validateQuery(options, req, res, function (err) {
             if (err) {
                 return next(err);
             }
-            validateFields(options, req, res, next);
+            validateSort(options, req, res, function (err) {
+                if (err) {
+                    return next(err);
+                }
+                validateCursor(options, req, res, function (err) {
+                    if (err) {
+                        return next(err);
+                    }
+                    validateDirection(options, req, res, function (err) {
+                        if (err) {
+                            return next(err);
+                        }
+                        validateFields(options, req, res, next);
+                    });
+                });
+            });
         });
     });
+};
+
+var validateDirection = function (options, req, res, next) {
+  var data = req.query.data;
+  if (!data.direction) {
+      return next();
+  }
+  if (!data.cursor) {
+      return res.pond(errors.badRequest('\'data.direction\' specified without a cursor'));
+  }
+  if (data.direction !== 1 && data.direction !== -1) {
+      return res.pond(errors.badRequest('\'data.direction\' contains an invalid value'));
+  }
+  next();
 };
 
 var validateData = function (options, req, res, next) {
@@ -488,14 +517,15 @@ var validateData = function (options, req, res, next) {
     next();
 };
 
-var validateQuery = function (options, paging, res, next) {
-    var query = paging.query;
+var validateQuery = function (options, req, res, next) {
+    var data = req.query.data;
+    var query = data.query;
     if (!query) {
-        paging.query = {};
+        data.query = {};
         return next();
     }
     if (typeof query !== 'object') {
-        return res.pond(errors.badRequest('\'paging.query\' contains an invalid value'));
+        return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
     }
     var o;
     var path;
@@ -509,17 +539,17 @@ var validateQuery = function (options, paging, res, next) {
         }
         path = paths[filter];
         if (!path) {
-            return res.pond(errors.badRequest('\'paging.query\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
         }
         o = path.options || {};
         if (!o.searchable && !o.sortable) {
-            return res.pond(errors.badRequest('\'paging.query\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
         }
     }
     next();
 };
 
-var validateSort = function (options, paging, res, next) {
+var validateSort = function (options, req, res, next) {
     var o;
     var path;
     var value;
@@ -527,9 +557,10 @@ var validateSort = function (options, paging, res, next) {
     var model = options.model;
     var schema = model.schema;
     var paths = schema.paths;
-    var sort = paging.sort || {createdAt: -1, id: -1};
+    var data = req.query.data;
+    var sort = data.sort || {createdAt: -1, id: -1};
     if (typeof sort !== 'object') {
-        return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
+        return res.pond(errors.badRequest('\'data.sort\' contains an invalid value'));
     }
     var clone = {};
     for (sorter in sort) {
@@ -538,7 +569,7 @@ var validateSort = function (options, paging, res, next) {
         }
         value = sort[sorter];
         if (value !== -1 && value !== 1) {
-            return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'data.sort\' contains an invalid value'));
         }
         if (sorter === 'id') {
             sorter = '_id';
@@ -547,11 +578,11 @@ var validateSort = function (options, paging, res, next) {
         }
         path = paths[sorter];
         if (!path) {
-            return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'data.sort\' contains an invalid value'));
         }
         o = path.options || {};
         if (!o.sortable) {
-            return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
+            return res.pond(errors.badRequest('\'data.sort\' contains an invalid value'));
         }
         clone[sorter] = value;
     }
@@ -561,29 +592,14 @@ var validateSort = function (options, paging, res, next) {
     if (!clone._id) {
         clone['_id'] = clone.createdAt;
     }
-    paging.sort = clone;
-    validateCompounds(options, paging, res, next);
-};
-
-var validatePaging = function (options, req, res, next) {
-    var data = req.query.data;
-    var paging = data.paging || (data.paging = {});
-    validateQuery(options, paging, res, function (err) {
-        if (err) {
-            return next(err);
-        }
-        validateSort(options, paging, res, function (err) {
-            if (err) {
-                return next(err);
-            }
-            validateCursor(options, paging, res, next);
-        });
-    });
+    data.sort = clone;
+    validateCompounds(options, data, res, next);
 };
 
 // TODO: validate passing non-id values in place of id values
-var validateCursor = function (options, paging, res, next) {
-    var cursor = paging.cursor;
+var validateCursor = function (options, req, res, next) {
+    var data = req.query.data;
+    var cursor = data.cursor;
     if (!cursor) {
         return next();
     }
@@ -600,11 +616,11 @@ var validateCursor = function (options, paging, res, next) {
         }
         path = paths[field];
         if (!path) {
-            return validated(errors.badRequest('\'paging.cursor\' contains an invalid value'));
+            return validated(errors.badRequest('\'data.cursor\' contains an invalid value'));
         }
         value = cursor[field];
         if (!value) {
-            return validated(errors.badRequest('\'paging.cursor.%s\' + contains an invalid value', field));
+            return validated(errors.badRequest('\'data.cursor.%s\' + contains an invalid value', field));
         }
         var options = path.options || {};
         var o = {
@@ -619,7 +635,7 @@ var validateCursor = function (options, paging, res, next) {
         }
         validator(o, function (err) {
             if (err) {
-                return validated(errors.badRequest('paging.cursor.%s', err.message));
+                return validated(errors.badRequest('data.cursor.%s', err.message));
             }
             validated();
         });
@@ -660,11 +676,11 @@ var validateFields = function (options, req, res, next) {
     next();
 };
 
-var validateCompounds = function (options, paging, res, next) {
+var validateCompounds = function (options, data, res, next) {
     var i;
     var index;
     var compound;
-    var sort = paging.sort;
+    var sort = data.sort;
     var model = options.model;
     var schema = model.schema;
     var compounds = schema.compounds;
@@ -681,8 +697,7 @@ var validateCompounds = function (options, paging, res, next) {
         }
     }
     if (!index) {
-        return res.pond(errors.badRequest('\'paging.sort\' contains an invalid value'));
+        return res.pond(errors.badRequest('\'data.sort\' contains an invalid value'));
     }
-    paging.index = index;
     next();
 };
