@@ -30,12 +30,14 @@ var notify = function (res, err) {
 
 exports.types = {};
 
+exports.values = {};
+
 exports.contents = {};
 
 exports.resources = {};
 
 exports.types.string = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var string = o.value;
         var field = options.field || o.field;
@@ -59,7 +61,7 @@ exports.types.string = function (options) {
 };
 
 exports.types.number = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var number = o.value;
         var field = options.field || o.field;
@@ -82,8 +84,87 @@ exports.types.number = function (options) {
     };
 };
 
+exports.types.allowed = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var user = o.user;
+        if (!user) {
+            return done(errors.serverError());
+        }
+        var perms = options.perms;
+        var allowed = o.value;
+        var current = o.current;
+        var field = options.field || o.field;
+        var i;
+        var entry;
+        var length = allowed.length;
+        var found = false;
+        for (i = 0; i < length; i++) {
+            entry = allowed[i];
+            if (!entry.user) {
+                return done(unprocessableEntity('\'%s[*].user\' needs to be specified', field));
+            }
+            if (!Array.isArray(entry.perms)) {
+                return done(unprocessableEntity('\'%s\' needs to be an array', field + '.perms'));
+            }
+            var valid = entry.perms.every(function (perm) {
+                return perms.indexOf(perm) !== -1;
+            });
+            if (!valid) {
+                return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.perms'));
+            }
+            if (!current) {
+                continue;
+            }
+            if (entry.user !== user.id) {
+                continue;
+            }
+            if (!allowed.indexOf('read') || !allowed.indexOf('update')) {
+                return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
+            }
+            found = true;
+        }
+        if (current && !found) {
+            return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
+        }
+        done();
+    };
+};
+
+exports.values.allowed = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var user = o.user;
+        if (!user) {
+            return done(null, []);
+        }
+        var value = [
+            {user: user.id, perms: options.perms}
+        ];
+        done(null, value);
+    };
+};
+
+exports.values.user = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var user = o.user;
+        if (!user) {
+            return done(errors.serverError());
+        }
+        done(null, o.user._id);
+    };
+};
+
+exports.values.createdAt = function (options) {
+    options = options || {};
+    return function (o, done) {
+        done(null, new Date());
+    };
+};
+
 exports.types.stream = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var value = o.value;
         var field = options.field || o.field;
@@ -100,7 +181,7 @@ exports.types.stream = function (options) {
 };
 
 exports.types.binaries = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var value = o.value;
         var stream = o.stream;
@@ -168,7 +249,7 @@ exports.types.binaries = function (options) {
 };
 
 exports.types.array = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var array = o.value;
         var field = options.field || o.field;
@@ -198,19 +279,19 @@ exports.types.array = function (options) {
 };
 
 exports.types.ref = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var ref = o.value;
         var field = options.field || o.field;
         if (!mongoose.Types.ObjectId.isValid(ref)) {
             return done(unprocessableEntity('\'%s\' needs to be a valid reference', field));
         }
-        done()
+        done();
     };
 };
 
 exports.types.boolean = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var boolean = o.value;
         var field = options.field || o.field;
@@ -220,12 +301,12 @@ exports.types.boolean = function (options) {
         if (typeof boolean !== 'boolean' && !(boolean instanceof Boolean)) {
             return done(unprocessableEntity('\'%s\' needs to be a boolean', field));
         }
-        done()
+        done();
     };
 };
 
 exports.types.url = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var url = o.value;
         var field = options.field || o.field;
@@ -237,49 +318,49 @@ exports.types.url = function (options) {
 };
 
 exports.types.name = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         done()
     };
 };
 
 exports.types.title = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.color = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.currency = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.contacts = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.date = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.email = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var email = o.value;
         var field = options.field || o.field;
@@ -291,12 +372,12 @@ exports.types.email = function (options) {
         if (at === -1 || dot === -1 || dot < at) {
             return done(unprocessableEntity('\'%s\' needs to be a valid email address', field));
         }
-        done()
+        done();
     };
 };
 
 exports.types.password = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
         var password = o.value;
         var field = options.field || o.field;
@@ -332,30 +413,30 @@ exports.types.password = function (options) {
 };
 
 exports.types.birthday = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.addresses = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.phones = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
 exports.types.socials = function (options) {
-    options = options || {}
+    options = options || {};
     return function (o, done) {
-        done()
+        done();
     };
 };
 
@@ -413,25 +494,51 @@ exports.create = function (options, req, res, next) {
         }
         var model = options.model;
         var data = req.body;
+        var current = req.current;
         var schema = model.schema;
         var paths = schema.paths;
         var streams = req.streams || {};
         // TODO: remove fields which is not in schema
         async.eachLimit(Object.keys(paths), 1, function (field, validated) {
+            var value;
             var path = paths[field];
             var options = path.options || {};
-            if (options.server) {
-                return validated();
-            }
             var o = {
+                user: req.user,
                 path: path,
                 field: field,
                 value: data[field],
+                current: current && current[field],
                 stream: streams[field],
                 options: {}
             };
-            if (!o.value && !o.stream) {
-                return validated(path.isRequired ? unprocessableEntity('\'%s\' needs to be specified', field) : null);
+            if (options.server) {
+                value = options.value;
+                if (!value) {
+                    return validated();
+                }
+                value(o, function (err, value) {
+                    if (err) {
+                        return validated(err);
+                    }
+                    data[field] = value;
+                    validated();
+                });
+                return;
+            }
+            if ((!o.value && !o.stream) || (Array.isArray(o.value) && !o.value.length)) {
+                value = options.value;
+                if (!value) {
+                    return path.isRequired ? validated(unprocessableEntity('\'%s\' needs to be specified', field)) : validated();
+                }
+                value(o, function (err, value) {
+                    if (err) {
+                        return validated(err);
+                    }
+                    data[field] = value;
+                    validated();
+                });
+                return;
             }
             var validator = options.validator;
             if (!validator) {
@@ -448,7 +555,31 @@ exports.create = function (options, req, res, next) {
 };
 
 exports.update = function (options, req, res, next) {
-    exports.create(options, req, res, next);
+    var id = options.id;
+    var model = options.model;
+    model.findOne({_id: id}, function (err, current) {
+        if (err) {
+            return next(err);
+        }
+        if (!current) {
+            return res.pond(errors.notFound());
+        }
+        var token = req.token;
+        var perm = model.modelName + ':' + id;
+        if (!token.can(perm, 'read', current)) {
+            return res.pond(errors.notFound());
+        }
+        if (!token.can(perm, 'update', current)) {
+            return res.pond(errors.unauthorized());
+        }
+        req.current = current;
+        exports.create(options, req, res, function (err) {
+            if (err) {
+                return next(err);
+            }
+            next();
+        });
+    });
 };
 
 exports.find = function (options, req, res, next) {
@@ -486,17 +617,17 @@ exports.find = function (options, req, res, next) {
 };
 
 var validateDirection = function (options, req, res, next) {
-  var data = req.query.data;
-  if (!data.direction) {
-      return next();
-  }
-  if (!data.cursor) {
-      return res.pond(errors.badRequest('\'data.direction\' specified without a cursor'));
-  }
-  if (data.direction !== 1 && data.direction !== -1) {
-      return res.pond(errors.badRequest('\'data.direction\' contains an invalid value'));
-  }
-  next();
+    var data = req.query.data;
+    if (!data.direction) {
+        return next();
+    }
+    if (!data.cursor) {
+        return res.pond(errors.badRequest('\'data.direction\' specified without a cursor'));
+    }
+    if (data.direction !== 1 && data.direction !== -1) {
+        return res.pond(errors.badRequest('\'data.direction\' contains an invalid value'));
+    }
+    next();
 };
 
 var validateData = function (options, req, res, next) {
