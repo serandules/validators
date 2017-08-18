@@ -84,34 +84,34 @@ exports.types.number = function (options) {
     };
 };
 
-exports.types.allowed = function (options) {
+exports.types.permissions = function (options) {
     options = options || {};
     return function (o, done) {
         var user = o.user;
         if (!user) {
             return done(errors.serverError());
         }
-        var perms = options.perms;
-        var allowed = o.value;
+        var actions = options.actions;
+        var permissions = o.value;
         var current = o.current;
         var field = options.field || o.field;
         var i;
         var entry;
-        var length = allowed.length;
+        var length = permissions.length;
         var found = false;
         for (i = 0; i < length; i++) {
-            entry = allowed[i];
+            entry = permissions[i];
             if (!entry.user) {
                 return done(unprocessableEntity('\'%s[*].user\' needs to be specified', field));
             }
-            if (!Array.isArray(entry.perms)) {
-                return done(unprocessableEntity('\'%s\' needs to be an array', field + '.perms'));
+            if (!Array.isArray(entry.actions)) {
+                return done(unprocessableEntity('\'%s\' needs to be an array', field + '.actions'));
             }
-            var valid = entry.perms.every(function (perm) {
-                return perms.indexOf(perm) !== -1;
+            var valid = entry.actions.every(function (perm) {
+                return actions.indexOf(perm) !== -1;
             });
             if (!valid) {
-                return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.perms'));
+                return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.actions'));
             }
             if (!current) {
                 continue;
@@ -119,7 +119,7 @@ exports.types.allowed = function (options) {
             if (entry.user !== user.id) {
                 continue;
             }
-            if (!allowed.indexOf('read') || !allowed.indexOf('update')) {
+            if (!permissions.indexOf('read') || !permissions.indexOf('update')) {
                 return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
             }
             found = true;
@@ -131,7 +131,7 @@ exports.types.allowed = function (options) {
     };
 };
 
-exports.values.allowed = function (options) {
+exports.values.permissions = function (options) {
     options = options || {};
     return function (o, done) {
         var user = o.user;
@@ -139,7 +139,7 @@ exports.values.allowed = function (options) {
             return done(null, []);
         }
         var value = [
-            {user: user.id, perms: options.perms}
+            {user: user.id, actions: options.actions}
         ];
         done(null, value);
     };
@@ -587,7 +587,7 @@ exports.find = function (options, req, res, next) {
         if (err) {
             return next(err);
         }
-        var data = req.query.data;
+        var data = req.query.data || (req.query.data = {});
         data.count = data.count || 20;
         if (data.count > 100) {
             return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
@@ -648,12 +648,44 @@ var validateData = function (options, req, res, next) {
     next();
 };
 
+var permitOnly = function (query, user, actions, next) {
+    serand.group('public', function (err, pub) {
+        if (err) {
+            return next(err);
+        }
+        var groups;
+        var permissions = [{
+            group: pub.id,
+            actions: actions
+        }];
+        if (user) {
+            permissions.push({
+                user: user.id,
+                actions: actions
+            });
+            groups = user.groups;
+            groups.forEach(function (group) {
+                permissions.push({
+                    group: group.id,
+                    actions: actions
+                });
+            });
+        }
+        query.permissions = {
+            $elemMatch: {
+                $or: permissions
+            }
+        };
+        next();
+    });
+};
+
 var validateQuery = function (options, req, res, next) {
     var data = req.query.data;
     var query = data.query;
     if (!query) {
         data.query = {};
-        return next();
+        return permitOnly(data.query, req.user, 'read', next);
     }
     if (typeof query !== 'object') {
         return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
@@ -677,7 +709,7 @@ var validateQuery = function (options, req, res, next) {
             return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
         }
     }
-    next();
+    permitOnly(query, req.user, 'read', next);
 };
 
 var validateSort = function (options, req, res, next) {
