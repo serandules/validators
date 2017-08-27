@@ -93,7 +93,7 @@ exports.types.permissions = function (options) {
         }
         var actions = options.actions;
         var permissions = o.value;
-        var current = o.current;
+        var id = o.id;
         var field = options.field || o.field;
         var i;
         var entry;
@@ -101,8 +101,8 @@ exports.types.permissions = function (options) {
         var found = false;
         for (i = 0; i < length; i++) {
             entry = permissions[i];
-            if (!entry.user) {
-                return done(unprocessableEntity('\'%s[*].user\' needs to be specified', field));
+            if (!(entry.user || entry.group)) {
+                return done(unprocessableEntity('either \'%s[*].user\' or \'%s[*].group\' needs to be specified', field, field));
             }
             if (!Array.isArray(entry.actions)) {
                 return done(unprocessableEntity('\'%s\' needs to be an array', field + '.actions'));
@@ -113,7 +113,7 @@ exports.types.permissions = function (options) {
             if (!valid) {
                 return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.actions'));
             }
-            if (!current) {
+            if (!id) {
                 continue;
             }
             if (entry.user !== user.id) {
@@ -124,7 +124,7 @@ exports.types.permissions = function (options) {
             }
             found = true;
         }
-        if (current && !found) {
+        if (id && !found) {
             return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
         }
         done();
@@ -494,7 +494,6 @@ exports.create = function (options, req, res, next) {
         }
         var model = options.model;
         var data = req.body;
-        var current = req.current;
         var schema = model.schema;
         var paths = schema.paths;
         var streams = req.streams || {};
@@ -508,7 +507,7 @@ exports.create = function (options, req, res, next) {
                 path: path,
                 field: field,
                 value: data[field],
-                current: current && current[field],
+                id: options.id,
                 stream: streams[field],
                 options: {}
             };
@@ -554,25 +553,54 @@ exports.create = function (options, req, res, next) {
     });
 };
 
-exports.update = function (options, req, res, next) {
+exports.query = function (req, res, next) {
+    var data = req.query.data;
+    if (!data) {
+        req.query.data = {};
+        return next();
+    }
+    try {
+        data = JSON.parse(data);
+    } catch (e) {
+        return res.pond(errors.badRequest('\'data\' contains an invalid value'));
+    }
+    if (typeof data !== 'object') {
+        return res.pond(errors.badRequest('\'data\' contains an invalid value'));
+    }
+    req.query.data = data;
+    next();
+};
+
+exports.findOne = function (options, req, res, next) {
     var id = options.id;
-    var model = options.model;
-    model.findOne({_id: id}, function (err, current) {
+    if (!mongutils.objectId(id)) {
+        return res.pond(errors.notFound());
+    }
+    var query = {
+        _id: id
+    };
+    permitOnly(query, req.user, 'read', function (err) {
         if (err) {
             return next(err);
         }
-        if (!current) {
-            return res.pond(errors.notFound());
+        req.query = query;
+        next();
+    });
+};
+
+exports.update = function (options, req, res, next) {
+    var id = options.id;
+    if (!mongutils.objectId(id)) {
+        return res.pond(errors.notFound());
+    }
+    var query = {
+        _id: id
+    };
+    permitOnly(query, req.user, 'update', function (err) {
+        if (err) {
+            return next(err);
         }
-        var token = req.token;
-        var perm = model.modelName + ':' + id;
-        if (!token.can(perm, 'read', current)) {
-            return res.pond(errors.notFound());
-        }
-        if (!token.can(perm, 'update', current)) {
-            return res.pond(errors.unauthorized());
-        }
-        req.current = current;
+        req.query = query;
         exports.create(options, req, res, function (err) {
             if (err) {
                 return next(err);
@@ -583,33 +611,28 @@ exports.update = function (options, req, res, next) {
 };
 
 exports.find = function (options, req, res, next) {
-    validateData(options, req, res, function (err) {
+    var data = req.query.data;
+    data.count = data.count || 20;
+    if (data.count > 100) {
+        return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
+    }
+    validateQuery(options, req, res, function (err) {
         if (err) {
             return next(err);
         }
-        var data = req.query.data || (req.query.data = {});
-        data.count = data.count || 20;
-        if (data.count > 100) {
-            return res.pond(errors.badRequest('\'data.count\' contains an invalid value'))
-        }
-        validateQuery(options, req, res, function (err) {
+        validateSort(options, req, res, function (err) {
             if (err) {
                 return next(err);
             }
-            validateSort(options, req, res, function (err) {
+            validateCursor(options, req, res, function (err) {
                 if (err) {
                     return next(err);
                 }
-                validateCursor(options, req, res, function (err) {
+                validateDirection(options, req, res, function (err) {
                     if (err) {
                         return next(err);
                     }
-                    validateDirection(options, req, res, function (err) {
-                        if (err) {
-                            return next(err);
-                        }
-                        validateFields(options, req, res, next);
-                    });
+                    validateFields(options, req, res, next);
                 });
             });
         });
@@ -627,24 +650,6 @@ var validateDirection = function (options, req, res, next) {
     if (data.direction !== 1 && data.direction !== -1) {
         return res.pond(errors.badRequest('\'data.direction\' contains an invalid value'));
     }
-    next();
-};
-
-var validateData = function (options, req, res, next) {
-    var data = req.query.data;
-    if (!data) {
-        req.query.data = {};
-        return next();
-    }
-    try {
-        data = JSON.parse(data);
-    } catch (e) {
-        return res.pond(errors.badRequest('\'data\' contains an invalid value'));
-    }
-    if (typeof data !== 'object') {
-        return res.pond(errors.badRequest('\'data\' contains an invalid value'));
-    }
-    req.query.data = data;
     next();
 };
 
@@ -700,6 +705,9 @@ var validateQuery = function (options, req, res, next) {
         if (!query.hasOwnProperty(filter)) {
             continue;
         }
+        if (filter === 'id') {
+            continue;
+        }
         path = paths[filter];
         if (!path) {
             return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
@@ -708,6 +716,10 @@ var validateQuery = function (options, req, res, next) {
         if (!o.searchable && !o.sortable) {
             return res.pond(errors.badRequest('\'data.query\' contains an invalid value'));
         }
+    }
+    if (query.id) {
+        query._id = query.id;
+        delete query.id;
     }
     permitOnly(query, req.user, 'read', next);
 };
