@@ -1,18 +1,23 @@
 {
-    "name": "validators",
-    "description": "validators",
-    "version": "0.0.0",
-    "author": {
-        "name": "serandives",
-        "email": "serandives@gmail.com"
-    },
-    "dependencies": {
-        "logger": "serandules/logger#master",
-        "lodash": "4.17.4",
-        "formidable": "1.1.1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/serandules/validators.git"
-    }
+  "name": "validators",
+  "description": "validators",
+  "version": "0.0.0",
+  "author": {
+    "name": "serandives",
+    "email": "serandives@gmail.com"
+  },
+  "dependencies": {
+    "logger": "serandules/logger#master",
+    "lodash": "4.17.4",
+    "mongoose": "4.*",
+    "formidable": "1.1.1",
+    "tmp": "0.0.33",
+    "serand": "serandules/serand#master",
+    "errors": "serandules/errors#master",
+    "mongutils": "serandules/mongutils#master"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/serandules/validators.git"
+  }
 }
