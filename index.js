@@ -9,8 +9,55 @@ var mongoose = require('mongoose');
 var formidable = require('formidable');
 
 var serand = require('serand');
+var utils = require('utils');
 var errors = require('errors');
 var mongutils = require('mongutils');
+
+var adminEmail = 'admin@serandives.com';
+
+var users = {};
+
+var groups = {};
+
+var findUser = function (email, done) {
+    var user = users[email];
+    if (user) {
+        return done(null, user);
+    }
+    var Users = mongoose.model('users');
+    Users.findOne({email: email}, function (err, user) {
+        if (err) {
+            return done(err)
+        }
+        users[email] = user;
+        done(null, user);
+    });
+};
+
+var findGroup = function (user, name, done) {
+    var o = groups[user] || (groups[user] = {});
+    var group = o[name];
+    if (group) {
+        return done(null, group);
+    }
+    var Groups = mongoose.model('groups');
+    Groups.findOne({user: user, name: name}, function (err, group) {
+        if (err) {
+            return done(err)
+        }
+        o[name] = group;
+        done(null, group);
+    });
+};
+
+var group = function (name, done) {
+    findUser(adminEmail, function (err, user) {
+        if (err) {
+            return done(err);
+        }
+        findGroup(user.id, name, done);
+    });
+};
 
 var format = function () {
     return util.format.apply(util.format, Array.prototype.slice.call(arguments));
@@ -19,13 +66,6 @@ var format = function () {
 var unprocessableEntity = function () {
     var message = format.apply(format, Array.prototype.slice.call(arguments));
     return errors.unprocessableEntity(message);
-};
-
-var notify = function (res, err) {
-    if (err instanceof serand.Error) {
-        return res.pond(err);
-    }
-    res.pond(errors.serverError());
 };
 
 exports.types = {};
@@ -486,12 +526,7 @@ exports.contents.multipart = function (req, res, done) {
 };
 
 exports.create = function (options, req, res, next) {
-    var content = options.content || 'json';
-    var validate = exports.contents[content];
-    validate(req, res, function (err) {
-        if (err) {
-            return notify(res, err);
-        }
+    var create = function (next) {
         var model = options.model;
         var data = req.body;
         var schema = model.schema;
@@ -545,11 +580,22 @@ exports.create = function (options, req, res, next) {
             }
             validator(o, validated);
         }, function (err) {
-            if (!err) {
-                return next();
+            if (err) {
+                return res.pond(err);
             }
-            notify(res, err);
+            next();
         });
+    };
+    var content = options.content;
+    if (!content) {
+        return create(next);
+    }
+    var validate = exports.contents[content];
+    validate(req, res, function (err) {
+        if (err) {
+            return res.pond(err);
+        }
+        create(next);
     });
 };
 
@@ -654,7 +700,7 @@ var validateDirection = function (options, req, res, next) {
 };
 
 var permitOnly = function (query, user, actions, next) {
-    serand.group('public', function (err, pub) {
+    group('public', function (err, pub) {
         if (err) {
             return next(err);
         }
