@@ -353,13 +353,13 @@ exports.types.groups = function (options) {
             if (err) {
                 return done(err);
             }
-            var model = mongoose.model('groups');
+            var Groups = mongoose.model('groups');
             var query = {_id: {$in: groups}};
             permitOnly(query, o.user, 'read', function (err) {
                 if (err) {
                     return done(err);
                 }
-                model.find(query).select('_id').exec(function (err, groupz) {
+                Groups.find(query).select('_id').exec(function (err, groupz) {
                     if (err) {
                         return done(err);
                     }
@@ -542,6 +542,13 @@ exports.contents.json = function (req, res, done) {
     done(errors.unsupportedMedia());
 };
 
+exports.contents.urlencoded = function (req, res, done) {
+    if (req.is('application/x-www-form-urlencoded')) {
+        return done();
+    }
+    done(errors.unsupportedMedia());
+};
+
 exports.contents.multipart = function (req, res, done) {
     req.streams = {};
     if (!req.is('multipart/form-data')) {
@@ -587,6 +594,7 @@ exports.create = function (options, req, res, next) {
         var schema = model.schema;
         var paths = schema.paths;
         var streams = req.streams || {};
+        console.log(data)
         // TODO: remove fields which is not in schema
         async.eachLimit(Object.keys(paths), 1, function (field, validated) {
             var value;
