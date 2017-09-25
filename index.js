@@ -240,6 +240,7 @@ exports.types.binaries = function (options) {
             });
             var value = o.value;
             validator({
+                user: o.user,
                 path: path,
                 field: field,
                 value: value,
@@ -255,6 +256,7 @@ exports.types.binaries = function (options) {
                 })
             });
             validator({
+                user: o.user,
                 path: path,
                 field: field,
                 value: stream,
@@ -309,12 +311,65 @@ exports.types.array = function (options) {
         }
         async.each(array, function (v, validated) {
             options.validator({
+                user: o.user,
                 path: o.path,
                 field: field + '[*]',
                 value: v,
                 options: o.options
             }, validated)
         }, done);
+    };
+};
+
+exports.types.groups = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var groups = o.value;
+        var field = options.field || o.field;
+        var max = o.options.max || options.max || 10;
+        var min = o.options.min || options.min || 0;
+        if (!groups) {
+            return done(unprocessableEntity('\'%s\' needs to be specified', field));
+        }
+        if (!Array.isArray(groups)) {
+            return done(unprocessableEntity('\'%s\' needs to be an array', field));
+        }
+        if (max < groups.length) {
+            return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
+        }
+        if (min > groups.length) {
+            return done(unprocessableEntity('\'%s\' needs to contain more items', field));
+        }
+        async.each(groups, function (v, validated) {
+            var validator = exports.types.ref();
+            validator({
+                user: o.user,
+                path: o.path,
+                field: field + '[*]',
+                value: v,
+                options: o.options
+            }, validated);
+        }, function (err) {
+            if (err) {
+                return done(err);
+            }
+            var model = mongoose.model('groups');
+            var query = {_id: {$in: groups}};
+            permitOnly(query, o.user, 'read', function (err) {
+                if (err) {
+                    return done(err);
+                }
+                model.find(query).select('_id').exec(function (err, groupz) {
+                    if (err) {
+                        return done(err);
+                    }
+                    if (!groupz || (groups.length !== groupz.length)) {
+                        return done(unprocessableEntity('\'%s\' contains invalid values', field));
+                    }
+                    done();
+                });
+            });
+        });
     };
 };
 
@@ -642,16 +697,26 @@ exports.update = function (options, req, res, next) {
     var query = {
         _id: id
     };
-    permitOnly(query, req.user, 'update', function (err) {
+    var model = options.model;
+    model.findOne(query, function (err, found) {
         if (err) {
             return next(err);
         }
-        req.query = query;
-        exports.create(options, req, res, function (err) {
+        if (!found) {
+            return res.pond(errors.notFound());
+        }
+        req.found = found;
+        permitOnly(query, req.user, 'update', function (err) {
             if (err) {
                 return next(err);
             }
-            next();
+            req.query = query;
+            exports.create(options, req, res, function (err) {
+                if (err) {
+                    return next(err);
+                }
+                next();
+            });
         });
     });
 };
@@ -700,34 +765,51 @@ var validateDirection = function (options, req, res, next) {
 };
 
 var permitOnly = function (query, user, actions, next) {
-    group('public', function (err, pub) {
+    var restrict = function (next) {
+        group('public', function (err, pub) {
+            if (err) {
+                return next(err);
+            }
+            var groups;
+            var permissions = [{
+                group: pub.id,
+                actions: actions
+            }];
+            if (user) {
+                permissions.push({
+                    user: user.id,
+                    actions: actions
+                });
+                groups = user.groups;
+                groups.forEach(function (group) {
+                    permissions.push({
+                        group: group.id,
+                        actions: actions
+                    });
+                });
+            }
+            query.permissions = {
+                $elemMatch: {
+                    $or: permissions
+                }
+            };
+            next();
+        });
+    };
+    if (!user) {
+        return restrict(next);
+    }
+    group('admin', function (err, admin) {
         if (err) {
             return next(err);
         }
-        var groups;
-        var permissions = [{
-            group: pub.id,
-            actions: actions
-        }];
-        if (user) {
-            permissions.push({
-                user: user.id,
-                actions: actions
-            });
-            groups = user.groups;
-            groups.forEach(function (group) {
-                permissions.push({
-                    group: group.id,
-                    actions: actions
-                });
-            });
+        var entry = _.find(user.groups, function (group) {
+            return String(group) === admin.id
+        });
+        if (entry) {
+            return next();
         }
-        query.permissions = {
-            $elemMatch: {
-                $or: permissions
-            }
-        };
-        next();
+        restrict(next);
     });
 };
 
@@ -904,7 +986,7 @@ var validateCompounds = function (options, data, res, next) {
     var sort = data.sort;
     var model = options.model;
     var schema = model.schema;
-    var compounds = schema.compounds;
+    var compounds = schema.compounds || [];
     var length = compounds.length;
     var first = mongutils.first(sort);
     if (sort[first] === -1) {
