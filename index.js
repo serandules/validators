@@ -594,7 +594,6 @@ exports.create = function (options, req, res, next) {
         var schema = model.schema;
         var paths = schema.paths;
         var streams = req.streams || {};
-        console.log(data)
         // TODO: remove fields which is not in schema
         async.eachLimit(Object.keys(paths), 1, function (field, validated) {
             var value;
