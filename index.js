@@ -105,7 +105,7 @@ exports.types.number = function (options) {
     return function (o, done) {
         var number = o.value;
         var field = options.field || o.field;
-        if (!number) {
+        if (!number && number !== 0) {
             return done(unprocessableEntity('\'%s\' needs to be specified', field));
         }
         if (typeof number !== 'number' && !(number instanceof Number)) {
@@ -622,7 +622,7 @@ exports.create = function (options, req, res, next) {
                 });
                 return;
             }
-            if ((!o.value && !o.stream) || (Array.isArray(o.value) && !o.value.length)) {
+            if ((!o.value && o.value !== 0 && !o.stream) || (Array.isArray(o.value) && !o.value.length)) {
                 value = options.value;
                 if (!value) {
                     return path.isRequired ? validated(unprocessableEntity('\'%s\' needs to be specified', field)) : validated();
