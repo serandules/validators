@@ -13,6 +13,8 @@ var utils = require('utils');
 var errors = require('errors');
 var mongutils = require('mongutils');
 
+var locations = require('./locations')
+
 var adminEmail = 'admin@serandives.com';
 
 var users = {};
@@ -72,6 +74,8 @@ exports.types = {};
 
 exports.values = {};
 
+exports.requires = {};
+
 exports.contents = {};
 
 exports.resources = {};
@@ -119,6 +123,12 @@ exports.types.number = function (options) {
         }
         if (number.length > options.length) {
             return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
+        }
+        if (options.max && number > options.max) {
+            return done(unprocessableEntity('\'%s\' needs to be below or equal %s', field, options.max))
+        }
+        if (options.min && number < options.min) {
+            return done(unprocessableEntity('\'%s\' needs to be above or equal %s', field, options.min))
         }
         return done();
     };
@@ -182,6 +192,76 @@ exports.values.permissions = function (options) {
             {user: user.id, actions: options.actions}
         ];
         done(null, value);
+    };
+};
+
+exports.types.tags = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var i;
+        var entry;
+        var name;
+        var value;
+        var field;
+        var key;
+        var parts;
+        var tags = o.value;
+        var length = tags.length;
+        for (i = 0; i < length; i++) {
+            entry = tags[i];
+            name = entry.name;
+            if (!name) {
+                return done(unprocessableEntity('\'%s\' needs to be specified', o.field + '.name'));
+            }
+            if (typeof name !== 'string' && !(name instanceof String)) {
+                return done(unprocessableEntity('\'%s\' needs to be a string', o.field + '.name'));
+            }
+            parts = name.split(':');
+            field = parts[0];
+            key = parts[1];
+            if (!field || !key) {
+                return done(unprocessableEntity('\'%s\' contains an invalid value', o.field + '.name'));
+            }
+            if (!options[field] || options[field].indexOf(key) === -1) {
+                return done(unprocessableEntity('\'%s\' contains an invalid value', o.field + '.name'));
+            }
+            value = entry.value;
+            if (!value) {
+                return done(unprocessableEntity('\'%s\' needs to be specified', o.field + '.value'));
+            }
+            if (typeof value !== 'string' && !(value instanceof String)) {
+                return done(unprocessableEntity('\'%s\' needs to be a string', o.field + '.value'));
+            }
+        }
+        done();
+    };
+};
+
+exports.values.tags = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var tags = [];
+        var fields = Object.keys(options);
+        var data = o.data;
+        async.each(fields, function (field, eachDone) {
+            var value = data[field];
+            if (!value) {
+                return eachDone();
+            }
+            var tagger = options[field];
+            tagger(value, function (err, tagz) {
+                if (err) {
+                    return eachDone(err);
+                }
+                tagz.forEach(function (tag) {
+                    tag.name = field + ':' + tag.name;
+                });
+                tags = tags.concat(tagz);
+                eachDone();
+            });
+        }, function (err) {
+            done(err, tags);
+        });
     };
 };
 
@@ -535,6 +615,43 @@ exports.types.socials = function (options) {
     };
 };
 
+exports.types.country = function (options) {
+    options = options || {};
+    return function (o, done) {
+        var country = o.value;
+        var field = options.field || o.field;
+        if (!country) {
+            return done(unprocessableEntity('\'%s\' needs to be specified', field));
+        }
+        var allow = options.allow;
+        if (allow.indexOf(country) === -1) {
+            return done(unprocessableEntity('\'%s\' contains an invalid value', field))
+        }
+        done();
+    };
+};
+
+exports.requires.district = function (options) {
+    options = options || {};
+    return function (o, done) {
+        return locations.district(o, done);
+    };
+};
+
+exports.requires.province = function (options) {
+    options = options || {};
+    return function (o, done) {
+        return locations.province(o, done);
+    };
+};
+
+exports.requires.state = function (options) {
+    options = options || {};
+    return function (o, done) {
+        return locations.state(o, done);
+    };
+};
+
 exports.contents.json = function (req, res, done) {
     if (req.is('application/json')) {
         return done();
@@ -600,13 +717,15 @@ exports.create = function (options, req, res, next) {
             var path = paths[field];
             var options = path.options || {};
             var o = {
+                model: model,
                 user: req.user,
                 path: path,
                 field: field,
                 value: data[field],
                 id: options.id,
                 stream: streams[field],
-                options: {}
+                options: options,
+                data: data
             };
             if (options.server) {
                 value = options.value;
@@ -645,7 +764,33 @@ exports.create = function (options, req, res, next) {
             if (err) {
                 return res.pond(err);
             }
-            next();
+            async.eachLimit(Object.keys(paths), 1, function (field, validated) {
+                var path = paths[field];
+                var options = path.options || {};
+                var requir = options.require;
+                if (!requir) {
+                    return validated();
+                }
+                var o = {
+                    user: req.user,
+                    path: path,
+                    field: field,
+                    value: data[field],
+                    id: options.id,
+                    stream: streams[field],
+                    options: options,
+                    data: data
+                };
+                if (o.value || o.value === 0 || o.stream || (Array.isArray(o.value) && o.value.length)) {
+                    return validated();
+                }
+                requir(o, validated);
+            }, function (err) {
+                if (err) {
+                    return res.pond(err);
+                }
+                next();
+            });
         });
     };
     var content = options.content;
