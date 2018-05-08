@@ -237,6 +237,16 @@ exports.types.tags = function (options) {
     };
 };
 
+exports.values.limits = function (options) {
+  return function (o, done) {
+    done(null, {
+      second: 10,
+      day: 10000,
+      month: 100000
+    });
+  };
+};
+
 exports.values.tags = function (options) {
     options = options || {};
     return function (o, done) {
