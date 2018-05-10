@@ -21,6 +21,8 @@ var users = {};
 
 var groups = {};
 
+var tiers = {};
+
 var findUser = function (email, done) {
     var user = users[email];
     if (user) {
@@ -58,6 +60,43 @@ var group = function (name, done) {
             return done(err);
         }
         findGroup(user.id, name, done);
+    });
+};
+
+var grouped = function (user, name, done) {
+  group(name, function (err, o) {
+    if (err) {
+      return done(err);
+    }
+    var entry = _.find(user.groups, function (group) {
+      return String(group) === o.id;
+    });
+    done(null, !!entry);
+  });
+};
+
+var findTier = function (user, name, done) {
+  var o = tiers[user] || (tiers[user] = {});
+  var tier = o[name];
+  if (tier) {
+    return done(null, tier);
+  }
+  var Tiers = mongoose.model('tiers');
+  Tiers.findOne({user: user, name: name}, function (err, tier) {
+    if (err) {
+      return done(err)
+    }
+    o[name] = tier;
+    done(null, tier);
+  });
+};
+
+var tier = function (name, done) {
+    findUser(adminEmail, function (err, user) {
+        if (err) {
+            return done(err);
+        }
+        findTier(user.id, name, done);
     });
 };
 
@@ -237,12 +276,20 @@ exports.types.tags = function (options) {
     };
 };
 
-exports.values.limits = function (options) {
+exports.values.tier = function (options) {
   return function (o, done) {
-    done(null, {
-      second: 10,
-      day: 10000,
-      month: 100000
+    var user = o.user;
+    grouped(user, 'admin', function (err, yes) {
+      if (err) {
+        return done(err);
+      }
+      var name = yes ? 'unlimited' : 'free';
+      tier(name, function (err, tier) {
+        if (err) {
+          return done(err);
+        }
+        done(null, tier);
+      });
     });
   };
 };
@@ -961,14 +1008,11 @@ var permitOnly = function (query, user, actions, next) {
     if (!user) {
         return restrict(next);
     }
-    group('admin', function (err, admin) {
+    grouped(user.groups, 'admin', function (err, yes) {
         if (err) {
             return next(err);
         }
-        var entry = _.find(user.groups, function (group) {
-            return String(group) === admin.id
-        });
-        if (entry) {
+        if (yes) {
             return next();
         }
         restrict(next);
