@@ -292,7 +292,7 @@ exports.values.tier = function (options) {
       if (err) {
         return done(err);
       }
-      var name = yes ? 'unlimited' : 'free';
+      var name = yes ? 'unlimited' : 'basic';
       tier(name, function (err, tier) {
         if (err) {
           return done(err);
