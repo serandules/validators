@@ -223,14 +223,23 @@ exports.types.permissions = function (options) {
 exports.values.permissions = function (options) {
     options = options || {};
     return function (o, done) {
-        var user = o.user;
-        if (!user) {
-            return done(null, []);
-        }
-        var value = [
-            {user: user.id, actions: options.actions}
-        ];
-        done(null, value);
+        group('admin', function (err, admin) {
+          if (err) {
+            return done(err);
+          }
+          var value = [{
+            group: admin.id,
+            actions: options.actions
+          }];
+          var user = o.user;
+          if (user) {
+            value.push({
+              user: user.id,
+              actions: options.actions
+            })
+          }
+          done(null, value);
+        });
     };
 };
 
@@ -338,6 +347,18 @@ exports.values.createdAt = function (options) {
     return function (o, done) {
         done(null, new Date());
     };
+};
+
+exports.values.groups = function (options) {
+  options = options || {};
+  return function (o, done) {
+    group('public', function (err, pub) {
+      if (err) {
+        return done(err);
+      }
+      done(null, [pub.id]);
+    });
+  };
 };
 
 exports.types.stream = function (options) {
@@ -798,6 +819,21 @@ exports.create = function (options, req, res, next) {
                 });
                 return;
             }
+            if (options.hybrid) {
+                value = options.value;
+                if (!value) {
+                  return validated();
+                }
+                value(o, function (err, value) {
+                  if (err) {
+                    return validated(err);
+                  }
+                  var uv = data[field] || []
+                  data[field] = uv.concat(value);
+                  validated();
+                });
+                return;
+            }
             if ((!o.value && o.value !== 0 && !o.stream) || (Array.isArray(o.value) && !o.value.length)) {
                 value = options.value;
                 if (!value) {
@@ -991,8 +1027,11 @@ var permitOnly = function (query, user, actions, next) {
                 });
                 groups = user.groups;
                 groups.forEach(function (group) {
+                    if (group == pub.id) {
+                      return
+                    }
                     permissions.push({
-                        group: group.id,
+                        group: group, // TODO: may be populate the group
                         actions: actions
                     });
                 });
