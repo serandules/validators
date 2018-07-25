@@ -751,32 +751,26 @@ exports.contents.multipart = function (req, res, done) {
     }
     var form = new formidable.IncomingForm();
     form.on('progress', function (rec, exp) {
-        //log.debug('received >>> %s', rec);
-        //log.debug('expected >>> %s', exp);
+
     });
     form.on('field', function (name, value) {
         if (name !== 'data') {
             return;
         }
-        log.debug('%s %s', name, value);
         req.body = JSON.parse(value);
     });
     form.on('file', function (name, file) {
-        log.debug('name: %s', name);
-        log.debug('file: %s', file);
         var streams = req.streams[name] || (req.streams[name] = []);
         streams.push(file);
     });
     form.on('error', function (err) {
-        log.debug(err);
+        log.error('forms:errored', 'data:%j', data, err);
         done(errors.badRequest());
     });
     form.on('aborted', function () {
-        log.debug('request was aborted');
         done();
     });
     form.on('end', function () {
-        log.debug('form end');
         done();
     });
     form.parse(req);
