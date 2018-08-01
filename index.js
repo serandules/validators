@@ -570,6 +570,25 @@ exports.types.url = function (options) {
     };
 };
 
+exports.types.cors = function (options) {
+    options = options || {
+      url: exports.types.url(options)
+    };
+    return function (o, done) {
+        var urls = o.value;
+        var field = options.field || o.field;
+        async.each(urls, function (url, eachDone) {
+          if (url === '*') {
+            return eachDone();
+          }
+          options.url({
+            value: url,
+            field: field
+          }, eachDone);
+        }, done);
+    };
+};
+
 exports.types.name = function (options) {
     options = options || {};
     return function (o, done) {
