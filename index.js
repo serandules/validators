@@ -2,6 +2,7 @@ var log = require('logger')('validators:index');
 var util = require('util');
 var fs = require('fs');
 var async = require('async');
+var crypto = require('crypto');
 var stream = require('stream');
 var _ = require('lodash');
 var tmp = require('tmp');
@@ -218,6 +219,18 @@ exports.types.permissions = function (options) {
         }
         done();
     };
+};
+
+exports.values.random = function (options) {
+  var size = options.size || 96;
+  return function (o, done) {
+    crypto.randomBytes(size, function (err, buf) {
+      if (err) {
+        return done(err);
+      }
+      done(null, buf.toString('hex'));
+    });
+  };
 };
 
 exports.values.permissions = function (options) {
