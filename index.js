@@ -1104,6 +1104,7 @@ var validateDirection = function (options, req, res, next) {
 };
 
 var permitOnly = function (query, user, actions, next) {
+  // TODO actions --> [action]
   var restrict = function (next) {
     group('public', function (err, pub) {
       if (err) {
