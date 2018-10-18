@@ -391,6 +391,60 @@ exports.types.stream = function (options) {
   };
 };
 
+exports.types.binary = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var value = o.value;
+    var stream = o.stream && o.stream[0];
+    var path = o.path;
+    var required = path.isRequired;
+    var field = options.field || o.field;
+    if (stream && value) {
+      return done(unprocessableEntity('\'%s\' contains multiple values', field));
+    }
+    if (required && !(stream || value)) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    var validateData = function (done) {
+      var validator = exports.types.string({
+        field: field
+      });
+      var value = o.value;
+      validator({
+        user: o.user,
+        path: path,
+        field: field,
+        value: value,
+        options: {}
+      }, done);
+    };
+    var validateStream = function (done) {
+      var validator = exports.types.stream({
+        field: field
+      });
+      validator({
+        user: o.user,
+        path: path,
+        field: field,
+        value: stream,
+        options: {}
+      }, done);
+    };
+    if (!value) {
+      return validateStream(done);
+    }
+    if (!stream) {
+      return validateData(done);
+    }
+    validateStream(function (err) {
+      if (err) {
+        return done(err);
+      }
+      validateData(done);
+    });
+  };
+};
+
 exports.types.binaries = function (options) {
   options = options || {};
   return function (o, done) {
@@ -453,7 +507,7 @@ exports.types.binaries = function (options) {
           return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
         }
         if (min > length) {
-          return done(unprocessableEntity('\'%s\' needs to contain more items', field));
+          return done(unprocessableEntity('\'%s\' needs to contain more values', field));
         }
         done();
       });
@@ -478,7 +532,7 @@ exports.types.array = function (options) {
       return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
     }
     if (min > array.length) {
-      return done(unprocessableEntity('\'%s\' needs to contain more items', field));
+      return done(unprocessableEntity('\'%s\' needs to contain more values', field));
     }
     async.each(array, function (v, validated) {
       options.validator({
@@ -509,7 +563,7 @@ exports.types.groups = function (options) {
       return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
     }
     if (min > groups.length) {
-      return done(unprocessableEntity('\'%s\' needs to contain more items', field));
+      return done(unprocessableEntity('\'%s\' needs to contain more values', field));
     }
     async.each(groups, function (v, validated) {
       var validator = exports.types.ref();
@@ -599,6 +653,27 @@ exports.types.cors = function (options) {
         field: field
       }, eachDone);
     }, done);
+  };
+};
+
+var binaryTypes = [
+  'image',
+  'video',
+  'audio'
+];
+
+exports.types.binaryType = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var media = o.value;
+    var field = options.field || o.field;
+    if (!media) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    if (binaryTypes.indexOf(media) === -1) {
+      return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+    }
+    done();
   };
 };
 
@@ -1033,8 +1108,13 @@ exports.update = function (options, req, res, next) {
   if (!mongutils.objectId(id)) {
     return res.pond(errors.notFound());
   }
+  var user = req.user;
+  if (!user) {
+    return res.pond(errors.unauthorized());
+  }
   var query = {
-    _id: id
+    _id: id,
+    user: user.id
   };
   var model = options.model;
   model.findOne(query, function (err, found) {
