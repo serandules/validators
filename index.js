@@ -114,6 +114,8 @@ exports.types = {};
 
 exports.values = {};
 
+exports.hybrids = {};
+
 exports.requires = {};
 
 exports.contents = {};
@@ -171,6 +173,45 @@ exports.types.number = function (options) {
       return done(unprocessableEntity('\'%s\' needs to be above or equal %s', field, options.min))
     }
     return done();
+  };
+};
+
+exports.hybrids.permissions = function (options) {
+  return function (server, client, done) {
+    var index = {};
+
+    var analyze = function (o) {
+      o = o || [];
+      o.forEach(function (entry) {
+        var type = entry.user ? 'user' : 'group';
+        var id = entry.user || entry.group;
+        var actions = entry.actions || [];
+        var key = type + ':' + id;
+        var actionz = index[key] || (index[key] = []);
+        actions.forEach(function (action) {
+          if (actionz.indexOf(action) === -1) {
+            actionz.push(action);
+          }
+        });
+      });
+    };
+
+    analyze(server);
+    analyze(client);
+
+    var perms = [];
+    Object.keys(index).forEach(function (key) {
+      var parts = key.split(':');
+      var type = parts[0];
+      var id = parts[1];
+      var o = {
+        actions: index[key]
+      };
+      o[type] = id;
+      perms.push(o);
+    });
+
+    done(null, perms);
   };
 };
 
@@ -249,7 +290,7 @@ exports.values.permissions = function (options) {
         value.push({
           user: user.id,
           actions: options.actions
-        })
+        });
       }
       done(null, value);
     });
@@ -657,9 +698,7 @@ exports.types.cors = function (options) {
 };
 
 var binaryTypes = [
-  'image',
-  'video',
-  'audio'
+  'image'
 ];
 
 exports.types.binaryType = function (options) {
@@ -949,22 +988,28 @@ var create = function (options, req, done) {
       });
       return;
     }
-    if (options.hybrid) {
+    var hybrid = options.hybrid;
+    if (hybrid) {
       value = options.value;
       if (!value) {
         return validated();
       }
-      value(o, function (err, value) {
+      value(o, function (err, sv) {
         if (err) {
           return validated(err);
         }
-        var uv = data[field] || [];
-        encrypt(options, value, function (err, value) {
+        var cv = data[field] || [];
+        encrypt(options, sv, function (err, sv) {
           if (err) {
             return validated(err);
           }
-          data[field] = uv.concat(value);
-          validated();
+          hybrid(sv, cv, function (err, values) {
+            if (err) {
+              return validated(err);
+            }
+            data[field] = values;
+            validated();
+          });
         });
       });
       return;
@@ -1202,7 +1247,7 @@ var permitOnly = function (query, user, actions, next) {
         });
         groups = user.groups;
         groups.forEach(function (group) {
-          if (group == pub.id) {
+          if (group === pub.id) {
             return
           }
           permissions.push({
