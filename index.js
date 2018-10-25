@@ -1158,23 +1158,22 @@ exports.update = function (options, req, res, next) {
     return res.pond(errors.unauthorized());
   }
   var query = {
-    _id: id,
-    user: user.id
+    _id: id
   };
-  var model = options.model;
-  model.findOne(query, function (err, found) {
+  permitOnly(query, req.user, 'update', function (err) {
     if (err) {
       return next(err);
     }
-    if (!found) {
-      return res.pond(errors.notFound());
-    }
-    req.found = found;
-    permitOnly(query, req.user, 'update', function (err) {
+    req.query = query;
+    var model = options.model;
+    model.findOne(query, function (err, found) {
       if (err) {
         return next(err);
       }
-      req.query = query;
+      if (!found) {
+        return res.pond(errors.notFound());
+      }
+      req.found = found;
       exports.create(options, req, res, function (err) {
         if (err) {
           return next(err);
