@@ -221,7 +221,7 @@ exports.groups = function (options) {
       }
       var Groups = mongoose.model('groups');
       var query = {_id: {$in: groups}};
-      commons.permitOnly({user: o.user}, query, 'read', function (err) {
+      commons.permitOnly({user: o.user}, query, {$in: ['*', 'read']}, function (err) {
         if (err) {
           return done(err);
         }
@@ -511,6 +511,53 @@ exports.permissions = function (options) {
     if (id && !found) {
       return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
     }
+    done();
+  };
+};
+
+exports.visibility = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var user = o.user;
+    if (!user) {
+      return done(errors.serverError());
+    }
+    var actions = options.actions;
+    var visibility = o.value;
+    var id = o.id;
+    var field = options.field || o.field;
+
+
+    var model = o.model;
+    var schema = model.schema;
+    var paths = schema.paths;
+    Object.keys(visibility).every(function (vfield) {
+      if (vfield !== '*' && !paths[vfield]) {
+        done(unprocessableEntity('\'%s\' contains an invalid value', field));
+        return;
+      }
+      var entry = visibility[vfield];
+      if (typeof entry !== 'object') {
+        done(unprocessableEntity('\'%s.%s\' contains an invalid value', field, vfield));
+        return;
+      }
+      Object.keys(entry).every(function (entryKey) {
+        if (entryKey !== 'user' && entryKey !== 'group') {
+          done(unprocessableEntity('\'%s.%s\' contains an invalid value', field, vfield));
+          return;
+        }
+        var ids = entry[entryKey];
+        if (Array.isArray(ids)) {
+          done(unprocessableEntity('\'%s.%s.%s\' contains an invalid value', field, vfield, entryKey));
+          return;
+        }
+        ids.every(function (id, i) {
+          if (!mongoose.Types.ObjectId.isValid(id)) {
+            return done(unprocessableEntity('\'%s.%s.%s[%s]\' contains an invalid value', field, vfield, entryKey, i));
+          }
+        });
+      });
+    });
     done();
   };
 };

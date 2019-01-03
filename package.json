@@ -14,6 +14,7 @@
     "tmp": "0.0.33",
     "serand": "serandules/serand#master",
     "errors": "serandules/errors#master",
+    "utils": "serandules/utils#master",
     "mongutils": "serandules/mongutils#master"
   },
   "repository": {

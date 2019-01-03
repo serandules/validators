@@ -1,11 +1,11 @@
 
 exports.permissions = function (options) {
-  return function (server, client, done) {
+  return function (o, server, client, done) {
     var index = {};
 
-    var analyze = function (o) {
-      o = o || [];
-      o.forEach(function (entry) {
+    var analyze = function (v) {
+      v = v || [];
+      v.forEach(function (entry) {
         var type = entry.user ? 'user' : 'group';
         var id = entry.user || entry.group;
         var actions = entry.actions || [];
@@ -27,13 +27,63 @@ exports.permissions = function (options) {
       var parts = key.split(':');
       var type = parts[0];
       var id = parts[1];
-      var o = {
+      var entry = {
         actions: index[key]
       };
-      o[type] = id;
-      perms.push(o);
+      entry[type] = id;
+      perms.push(entry);
     });
 
     done(null, perms);
+  };
+};
+
+exports.visibility = function (options) {
+  return function (o, server, client, done) {
+    var index = {};
+    var model = o.model;
+    var schema = model.schema;
+    var paths = schema.paths;
+
+    var analyze = function (o) {
+      o = o || {};
+      Object.keys(o).forEach(function (field) {
+        if (field !== '*' && !paths[field]) {
+          return;
+        }
+        var values = o[field] || {};
+        var entry = index[field] || (index[field] = {
+          groups: [],
+          users: []
+        });
+        var groups = values.groups || [];
+        groups.forEach(function (group) {
+          entry.groups[group] = true;
+        });
+
+        var users = values.users || [];
+        users.forEach(function (user) {
+          entry.users[user] = true;
+        })
+      });
+    };
+
+    analyze(server);
+    analyze(client);
+    var visibility = {};
+    Object.keys(index).forEach(function (field) {
+      var values = visibility[field] || (visibility[field] = {
+        groups: [],
+        users: []
+      });
+      var entry = index[field];
+      Object.keys(entry.groups).forEach(function (group) {
+        values.groups.push(group);
+      });
+      Object.keys(entry.users).forEach(function (users) {
+        values.users.push(users);
+      });
+    });
+    done(null, visibility);
   };
 };

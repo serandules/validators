@@ -46,7 +46,7 @@ var validateQuery = function (ctx, done) {
   var query = search.query;
   if (!query) {
     search.query = {};
-    return commons.permitOnly(ctx, search.query, 'read', done);
+    return commons.permitOnly(ctx, search.query, {$in: ['*', 'read']}, done);
   }
   if (typeof query !== 'object') {
     return done(errors.badRequest('\'data.query\' contains an invalid value'));
@@ -76,7 +76,7 @@ var validateQuery = function (ctx, done) {
     query._id = query.id;
     delete query.id;
   }
-  commons.permitOnly(ctx, query, 'read', done);
+  commons.permitOnly(ctx, query, {$in: ['*', 'read']}, done);
 };
 
 var validateSort = function (ctx, done) {
@@ -244,7 +244,7 @@ exports.create = function (ctx, done) {
     var path = paths[field];
     var options = path.options || {};
     var o = {
-      model: model,
+      model: ctx.model,
       user: ctx.user,
       path: path,
       field: field,
@@ -290,7 +290,7 @@ exports.create = function (ctx, done) {
           if (err) {
             return validated(err);
           }
-          hybrid(sv, cv, function (err, values) {
+          hybrid(o, sv, cv, function (err, values) {
             if (err) {
               return validated(err);
             }
@@ -400,7 +400,7 @@ exports.findOne = function (ctx, done) {
   var query = {
     _id: id
   };
-  commons.permitOnly(ctx, query, 'read', function (err) {
+  commons.permitOnly(ctx, query, {$in: ['*', 'read']}, function (err) {
     if (err) {
       return did(err);
     }
@@ -425,7 +425,7 @@ exports.update = function (ctx, done) {
   var query = {
     _id: id
   };
-  commons.permitOnly(ctx, query, 'update', function (err) {
+  commons.permitOnly(ctx, query, {$in: ['*', 'update']}, function (err) {
     if (err) {
       return did(err);
     }
@@ -437,8 +437,14 @@ exports.update = function (ctx, done) {
       if (!found) {
         return did(errors.notFound());
       }
-      ctx.found = found;
-      exports.create(ctx, did);
+      ctx.found = utils.json(found);
+      utils.visibles(ctx, ctx.data, function (err, data) {
+        if (err) {
+          return done(err);
+        }
+        ctx.data = data;
+        exports.create(ctx, did);
+      });
     });
   });
 };

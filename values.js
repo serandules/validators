@@ -1,5 +1,6 @@
 var async = require('async');
 var crypto = require('crypto');
+var utils = require('utils');
 
 var errors = require('errors');
 var commons = require('./commons');
@@ -9,12 +10,12 @@ exports.values = {};
 exports.tier = function (options) {
   return function (o, done) {
     var user = o.user;
-    commons.grouped(user, 'admin', function (err, yes) {
+    utils.grouped(user, 'admin', function (err, yes) {
       if (err) {
         return done(err);
       }
       var name = yes ? 'unlimited' : 'basic';
-      commons.tier(name, function (err, tier) {
+      utils.tier(name, function (err, tier) {
         if (err) {
           return done(err);
         }
@@ -59,7 +60,7 @@ exports.user = function (options) {
     if (!user) {
       return done(errors.serverError());
     }
-    done(null, o.user._id);
+    done(null, o.user.id);
   };
 };
 
@@ -73,7 +74,7 @@ exports.createdAt = function (options) {
 exports.groups = function (options) {
   options = options || {};
   return function (o, done) {
-    commons.group('public', function (err, pub) {
+    utils.group('public', function (err, pub) {
       if (err) {
         return done(err);
       }
@@ -97,13 +98,13 @@ exports.random = function (options) {
 exports.permissions = function (options) {
   options = options || {};
   return function (o, done) {
-    commons.group('admin', function (err, admin) {
+    utils.group('admin', function (err, admin) {
       if (err) {
         return done(err);
       }
       var value = [{
         group: admin.id,
-        actions: options.actions
+        actions: ['*']
       }];
       var user = o.user;
       if (user) {
@@ -116,3 +117,26 @@ exports.permissions = function (options) {
     });
   };
 };
+
+exports.visibility = function (options) {
+  options = options || {};
+  return function (o, done) {
+    utils.group('admin', function (err, admin) {
+      if (err) {
+        return done(err);
+      }
+      var all = {
+        groups: [admin.id],
+        users: []
+      };
+      var user = o.user;
+      if (user) {
+        all.users.push(user.id);
+      }
+      done(null, {
+        '*': all
+      });
+    });
+  };
+};
+
