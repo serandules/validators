@@ -54,29 +54,80 @@ var validateQuery = function (ctx, done) {
   var o;
   var path;
   var filter;
+  var value;
   var schema = ctx.model.schema;
   var paths = schema.paths;
-  for (filter in query) {
-    if (!query.hasOwnProperty(filter)) {
-      continue;
+  async.each(Object.keys(query), function (field, eachDone) {
+    if (field === 'id') {
+      return eachDone();
     }
-    if (filter === 'id') {
-      continue;
-    }
-    path = paths[filter];
+    path = paths[field];
     if (!path) {
-      return done(errors.badRequest('\'data.query\' contains an invalid value'));
+      return eachDone(errors.badRequest('\'data.query\' contains an invalid value'));
     }
     o = path.options || {};
     if (!o.searchable && !o.sortable) {
-      return done(errors.badRequest('\'data.query\' contains an invalid value'));
+      return eachDone(errors.badRequest('\'data.query\' contains an invalid value'));
     }
-  }
-  if (query.id) {
-    query._id = query.id;
-    delete query.id;
-  }
-  commons.permitOnly(ctx, query, {$in: ['*', 'read']}, done);
+    value = query[field];
+    if (!value) {
+      return eachDone(errors.badRequest('\'data.query\' contains an invalid value'));
+    }
+
+    var options = path.options;
+    var validator = options.validator;
+
+    var validate = function (value, validated) {
+      if (!value) {
+        return validated();
+      }
+      var oo = {
+        model: ctx.model,
+        user: ctx.user,
+        path: path,
+        field: field,
+        value: value,
+        id: options.id,
+        options: options
+      };
+      validator(oo, validated);
+    };
+
+    var validateIn = function (val, validated) {
+      if (!Array.isArray(val)) {
+        return validated(errors.badRequest('\'data.query\' contains an invalid value'));
+      }
+      async.each(val, function (v, valid) {
+        validate(v, valid);
+      }, validated);
+    };
+
+    if (value.$in) {
+      delete value.$lte;
+      delete value.$gte;
+      return validateIn(value.$in, eachDone);
+    }
+
+    if (!value.$lte && !value.$gte) {
+      return validate(value, eachDone);
+    }
+
+    validate(value.$lte, function (err) {
+      if (err) {
+        return eachDone(err);
+      }
+      validate(value.$gte, eachDone);
+    });
+  }, function (err) {
+    if (err) {
+      return done(err);
+    }
+    if (query.id) {
+      query._id = query.id;
+      delete query.id;
+    }
+    commons.permitOnly(ctx, query, {$in: ['*', 'read']}, done);
+  });
 };
 
 var validateSort = function (ctx, done) {

@@ -95,6 +95,12 @@ exports.random = function (options) {
   };
 };
 
+exports._ = function (options) {
+  return function (o, done) {
+    done(null, {});
+  };
+};
+
 exports.permissions = function (options) {
   options = options || {};
   return function (o, done) {
