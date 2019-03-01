@@ -2,6 +2,7 @@ var util = require('util');
 var fs = require('fs');
 var mongoose = require('mongoose');
 var async = require('async');
+var _ = require('lodash');
 
 var commons = require('./commons');
 var errors = require('errors');
@@ -347,13 +348,110 @@ exports.currency = function (options) {
 exports.contacts = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    var contacts = o.value;
+    var field = options.field || o.field;
+    if (!contacts) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    var diff = _.difference(Object.keys(contacts), [
+      'email',
+      'phones',
+      'messenger',
+      'skype',
+      'viber',
+      'whatsapp'
+    ]);
+    if (diff.length) {
+      return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+    }
+    var validate = function (field, validator, done) {
+      var val = contacts[field];
+      if (!val) {
+        return done();
+      }
+      validator({
+        field: field,
+        value: val
+      }, done);
+    };
+    var validatePhones = function (phones, done) {
+      if (!phones) {
+        return done();
+      }
+      if (!Array.isArray(phones)) {
+        return done(unprocessableEntity('\'%s.phones\' contains an invalid value', field));
+      }
+      async.each(phones, function (phone, eachDone) {
+        if (!phone) {
+          return eachDone(unprocessableEntity('\'%s.phones\' contains an invalid value', field));
+        }
+        exports.phone()({
+          field: 'phones',
+          value: phone
+        }, eachDone);
+      }, done);
+    };
+    var validatePhone = function (phone, done) {
+      if (!phone) {
+        return done();
+      }
+      validatePhones([phone], done);
+    };
+    validate('email', exports.email(), function (err) {
+      if (err) {
+        return done(unprocessableEntity('\'%s.email\' contains an invalid value', field));
+      }
+      validatePhones(contacts.phones,function (err) {
+        if (err) {
+          return done(unprocessableEntity('\'%s.phones\' contains an invalid value', field));
+        }
+        validate('messenger', exports.string({length: 50}), function (err) {
+          if (err) {
+            return done(unprocessableEntity('\'%s.messenger\' contains an invalid value', field));
+          }
+          validate('skype', exports.string({length: 50}), function (err) {
+            if (err) {
+              return done(unprocessableEntity('\'%s.skype\' contains an invalid value', field));
+            }
+            validatePhone(contacts.viber, function (err) {
+              if (err) {
+                return done(unprocessableEntity('\'%s.viber\' contains an invalid value', field));
+              }
+              validatePhone(contacts.whatsapp, function (err) {
+                if (err) {
+                  return done(unprocessableEntity('\'%s.whatsapp\' contains an invalid value', field));
+                }
+                done();
+              });
+            });
+          });
+        });
+      });
+    });
   };
 };
 
 exports.date = function (options) {
   options = options || {};
   return function (o, done) {
+    var date = o.value;
+    var field = options.field || o.field;
+    if (!date) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    if (date instanceof Date) {
+      return done();
+    }
+    var at;
+    var type = typeof date;
+    if (type === 'number' || date instanceof Number) {
+      at = new Date(date);
+    } else if (type === 'string' || date instanceof String) {
+      at = Date.parse(date);
+    }
+    if (!at) {
+      return done(unprocessableEntity('\'%s\' needs to be a valid date', field));
+    }
     done();
   };
 };
@@ -370,6 +468,21 @@ exports.email = function (options) {
     var dot = email.lastIndexOf('.');
     if (at === -1 || dot === -1 || dot < at) {
       return done(unprocessableEntity('\'%s\' needs to be a valid email address', field));
+    }
+    done();
+  };
+};
+
+exports.phone = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var phone = o.value;
+    var field = options.field || o.field;
+    if (!phone) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    if (!/^\+[1-9]\d{1,14}$/.test(phone)) {
+      return done(unprocessableEntity('\'%s\' needs to be a valid phone number', field));
     }
     done();
   };
