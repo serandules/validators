@@ -1,4 +1,16 @@
+var util = require('util');
+var errors = require('errors');
 var locations = require('./locations');
+
+var format = function () {
+  return util.format.apply(util.format, Array.prototype.slice.call(arguments));
+};
+
+var unprocessableEntity = function () {
+  var message = format.apply(format, Array.prototype.slice.call(arguments));
+  return errors.unprocessableEntity(message);
+};
+
 
 exports.district = function (options) {
   options = options || {};
@@ -18,5 +30,18 @@ exports.state = function (options) {
   options = options || {};
   return function (o, done) {
     return locations.state(o, done);
+  };
+};
+
+exports.contacts = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var options = o.options;
+    var field = options.field || o.field;
+    var data = o.data;
+    if (data.email || (data.phones && data.phones.length) || data.viber || data.whatsapp || data.messenger || data.skype) {
+      return done()
+    }
+    done(unprocessableEntity('\'%s\' needs to be specified', field));
   };
 };

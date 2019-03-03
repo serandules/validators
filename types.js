@@ -554,7 +554,12 @@ exports.addresses = function (options) {
 exports.phones = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    var phones = o.value;
+    async.each(phones, function (phone, validated) {
+      exports.phone({
+        field: options.field
+      })({value: phone}, validated);
+    }, done);
   };
 };
 
