@@ -557,7 +557,7 @@ exports.phones = function (options) {
     var phones = o.value;
     async.each(phones, function (phone, validated) {
       exports.phone({
-        field: options.field
+        field: (options.field || o.field) + '[*]'
       })({value: phone}, validated);
     }, done);
   };
