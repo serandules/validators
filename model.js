@@ -74,8 +74,7 @@ var validateQuery = function (ctx, done) {
       return eachDone(errors.badRequest('\'data.query\' contains an invalid value'));
     }
 
-    var options = path.options;
-    var validator = options.validator;
+    var validator = o.validator;
 
     var validate = function (value, validated) {
       if (!value) {
@@ -87,8 +86,8 @@ var validateQuery = function (ctx, done) {
         path: path,
         field: field,
         value: value,
-        id: options.id,
-        options: options
+        id: o.id,
+        options: o
       };
       validator(oo, validated);
     };
