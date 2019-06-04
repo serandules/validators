@@ -41,9 +41,20 @@ exports.permitOnly = function (ctx, query, actions, done) {
             actions: actions
           });
         }
+        if (!query.permissions) {
+          query.permissions = {
+            $elemMatch: {
+              $or: permissions
+            }
+          };
+          return done();
+        }
         query.permissions = {
           $elemMatch: {
-            $or: permissions
+            $and: [
+              {$or: permissions},
+              query.permissions
+            ]
           }
         };
         done();
