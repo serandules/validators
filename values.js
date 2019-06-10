@@ -60,7 +60,8 @@ exports.user = function (options) {
     if (!user) {
       return done(errors.serverError());
     }
-    done(null, o.user.id);
+    var uid = o.found ? o.found.user : user.id;
+    done(null, uid);
   };
 };
 

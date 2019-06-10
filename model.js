@@ -44,6 +44,7 @@ var validateDirection = function (ctx, done) {
 var validateQuery = function (ctx, done) {
   var search = ctx.search;
   var query = search.query;
+  ctx.queried = _.cloneDeep(query);
   if (!query) {
     search.query = {};
     return commons.permitOnly(ctx, search.query, {$in: ['*', 'read']}, done);
@@ -450,51 +451,54 @@ exports.findOne = function (ctx, done) {
   var query = {
     _id: id
   };
-  commons.permitOnly(ctx, query, {$in: ['*', 'read']}, function (err) {
+  var action = ctx.action || 'read';
+  commons.permitOnly(ctx, query, {$in: ['*', action]}, function (err) {
     if (err) {
       return did(err);
     }
     ctx.query = query;
+    ctx.action = action;
     did();
+  });
+};
+
+exports.updatable = function (ctx, done) {
+  ctx.action = 'update';
+  exports.findOne(ctx, function (err) {
+    if (err) {
+      return done(err);
+    }
+    var user = ctx.user;
+    if (!user) {
+      return done(errors.unauthorized());
+    }
+    ctx.model.findOne(ctx.query, function (err, found) {
+      if (err) {
+        return done(err);
+      }
+      if (!found) {
+        return done(errors.notFound());
+      }
+      ctx.found = utils.json(found);
+      done();
+    });
   });
 };
 
 exports.update = function (ctx, done) {
   var did = function () {
-    ctx.validated = true;
     done.apply(null, Array.prototype.slice.call(arguments));
   };
-  var id = ctx.id;
-  if (!model.objectId(id)) {
-    return did(errors.notFound());
-  }
-  var user = ctx.user;
-  if (!user) {
-    return did(errors.unauthorized());
-  }
-  var query = {
-    _id: id
-  };
-  commons.permitOnly(ctx, query, {$in: ['*', 'update']}, function (err) {
+  exports.updatable(ctx, function (err) {
     if (err) {
       return did(err);
     }
-    ctx.query = query;
-    ctx.model.findOne(query, function (err, found) {
+    utils.visibles(ctx, ctx.data, function (err, data) {
       if (err) {
         return did(err);
       }
-      if (!found) {
-        return did(errors.notFound());
-      }
-      ctx.found = utils.json(found);
-      utils.visibles(ctx, ctx.data, function (err, data) {
-        if (err) {
-          return done(err);
-        }
-        ctx.data = data;
-        exports.create(ctx, did);
-      });
+      ctx.data = data;
+      exports.create(ctx, did);
     });
   });
 };
