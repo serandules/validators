@@ -4,6 +4,7 @@ var mongoose = require('mongoose');
 var async = require('async');
 var _ = require('lodash');
 
+var utils = require('utils');
 var commons = require('./commons');
 var errors = require('errors');
 
@@ -583,6 +584,30 @@ exports.country = function (options) {
       return done(unprocessableEntity('\'%s\' contains an invalid value', field))
     }
     done();
+  };
+};
+
+exports.status = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var field = options.field || o.field;
+    var status = o.value;
+    if (!status) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    utils.workflow(options.workflow, function (err, workflow) {
+      if (err) {
+        return done(err);
+      }
+      if (!workflow) {
+        return done(new Error('!workflow'));
+      }
+      var transitions = workflow.transitions;
+      if (!transitions[status]) {
+        return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+      }
+      done();
+    });
   };
 };
 

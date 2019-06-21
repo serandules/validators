@@ -1,6 +1,9 @@
-
 exports.permissions = function (options) {
+  options = options || {};
   return function (o, server, client, done) {
+    if (options.server) {
+      return done(null, server);
+    }
     var index = {};
 
     var analyze = function (v) {
@@ -40,6 +43,9 @@ exports.permissions = function (options) {
 
 exports.visibility = function (options) {
   return function (o, server, client, done) {
+    if (options.server) {
+      return done(null, server);
+    }
     var index = {};
     var model = o.model;
     var schema = model.schema;

@@ -58,6 +58,7 @@ var validateQuery = function (ctx, done) {
   var value;
   var schema = ctx.model.schema;
   var paths = schema.paths;
+  var user = ctx.user;
   async.each(Object.keys(query), function (field, eachDone) {
     if (field === 'id') {
       return eachDone();
@@ -83,7 +84,7 @@ var validateQuery = function (ctx, done) {
       }
       var oo = {
         model: ctx.model,
-        user: ctx.user,
+        user: user,
         path: path,
         field: field,
         value: value,
@@ -289,14 +290,18 @@ exports.create = function (ctx, done) {
   var schema = ctx.model.schema;
   var paths = schema.paths;
   var streams = ctx.streams || {};
-  // TODO: remove fields which is not in schema
-  async.eachLimit(Object.keys(paths), 1, function (field, validated) {
+  var contexts = {};
+
+  var user = ctx.user;
+
+  var validateField = function (field, end) {
     var value;
     var path = paths[field];
     var options = path.options || {};
+
     var o = {
       model: ctx.model,
-      user: ctx.user,
+      user: user,
       path: path,
       field: field,
       value: data[field],
@@ -305,105 +310,156 @@ exports.create = function (ctx, done) {
       stream: streams[field],
       options: options,
       data: data,
-      found: ctx.found
+      found: ctx.found,
+      overrides: ctx.overrides
     };
+
     if (options.server) {
       value = options.value;
       if (!value) {
-        return validated();
+        return end();
       }
       value(o, function (err, value) {
         if (err) {
-          return validated(err);
+          return end(err);
         }
         encrypt(options, value, function (err, value) {
           if (err) {
-            return validated(err);
+            return end(err);
           }
           data[field] = value;
-          validated();
+          end();
         });
       });
       return;
     }
+
     var hybrid = options.hybrid;
+
     if (hybrid) {
       value = options.value;
       if (!value) {
-        return validated();
+        return end();
       }
       value(o, function (err, sv) {
         if (err) {
-          return validated(err);
+          return end(err);
         }
         var cv = data[field] || [];
         encrypt(options, sv, function (err, sv) {
           if (err) {
-            return validated(err);
+            return end(err);
           }
           hybrid(o, sv, cv, function (err, values) {
             if (err) {
-              return validated(err);
+              return end(err);
             }
             data[field] = values;
-            validated();
+            end();
           });
         });
       });
       return;
     }
+
     if ((!o.value && o.value !== 0 && !o.stream) || (Array.isArray(o.value) && !o.value.length)) {
       value = options.value;
       if (value) {
         value(o, function (err, value) {
           if (err) {
-            return validated(err);
+            return end(err);
           }
           encrypt(options, value, function (err, value) {
             if (err) {
-              return validated(err);
+              return end(err);
             }
             data[field] = value;
-            validated();
+            end();
           });
         });
         return;
       }
       if (!path.isRequired) {
-        return validated();
+        return end();
       }
       if (o.found && options.encrypted) {
         delete data[field];
-        return validated();
+        return end();
       }
-      return validated(unprocessableEntity('\'%s\' needs to be specified', field));
+      return end(unprocessableEntity('\'%s\' needs to be specified', field));
     }
+
     if (options.encrypted && o.valued && o.valued === o.value) {
       delete data[field];
-      return validated();
+      return end();
     }
+
     var validator = options.validator;
+
     if (!validator) {
       encrypt(options, o.value, function (err, value) {
         if (err) {
-          return validated(err);
+          return end(err);
         }
         data[field] = value;
-        validated();
+        end();
       });
       return;
     }
+
     validator(o, function (err) {
       if (err) {
-        return validated(err);
+        return end(err);
       }
       encrypt(options, o.value, function (err, value) {
         if (err) {
-          return validated(err);
+          return end(err);
         }
         data[field] = value;
-        validated();
+        end();
       });
+    });
+  };
+
+  var findContext = function (field) {
+    return contexts[field] || (contexts[field] = {
+      after: []
+    });
+  };
+
+  // TODO: remove fields which is not in schema
+  async.eachLimit(Object.keys(paths), 1, function (field, validated) {
+    var afterContext;
+    var path = paths[field];
+    var options = path.options || {};
+    var after = options.after;
+
+    if (after && paths[after]) {
+      afterContext = findContext(after);
+      if (!afterContext.done) {
+        afterContext.after.push(field);
+        return validated();
+      }
+    }
+
+    var context = findContext(field);
+
+    var finish = function (err) {
+      if (err) {
+        return validated(err);
+      }
+      var pending = context.after;
+      async.each(pending, function (field, eachDone) {
+        validateField(field, eachDone);
+      }, validated);
+    };
+
+    validateField(field, function (err) {
+      if (err) {
+        return finish(err);
+      }
+      context.done = true;
+      finish();
     });
   }, function (err) {
     if (err) {
@@ -413,11 +469,13 @@ exports.create = function (ctx, done) {
       var path = paths[field];
       var options = path.options || {};
       var requir = options.require;
+
       if (!requir) {
         return validated();
       }
+
       var o = {
-        user: ctx.user,
+        user: user,
         path: path,
         field: field,
         value: data[field],
@@ -426,9 +484,11 @@ exports.create = function (ctx, done) {
         options: options,
         data: data
       };
+
       if (o.value || o.value === 0 || o.stream || (Array.isArray(o.value) && o.value.length)) {
         return validated();
       }
+
       requir(o, validated);
     }, function (err) {
       if (err) {
@@ -463,6 +523,9 @@ exports.findOne = function (ctx, done) {
 };
 
 exports.updatable = function (ctx, done) {
+  if (ctx.found) {
+    return done();
+  }
   ctx.action = 'update';
   exports.findOne(ctx, function (err) {
     if (err) {

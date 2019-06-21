@@ -65,6 +65,28 @@ exports.user = function (options) {
   };
 };
 
+exports.status = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var overrides = o.overrides;
+    if (overrides.status) {
+      return done(null, overrides.status);
+    }
+    if (o.found) {
+      return done(null, o.found.status);
+    }
+    utils.workflow(options.workflow, function (err, workflow) {
+      if (err) {
+        return done(err);
+      }
+      if (!workflow) {
+        return done(new Error('!workflow'));
+      }
+      done(null, workflow.start);
+    });
+  };
+};
+
 exports.createdAt = function (options) {
   options = options || {};
   return function (o, done) {
@@ -105,6 +127,20 @@ exports._ = function (options) {
 exports.permissions = function (options) {
   options = options || {};
   return function (o, done) {
+    if (options.workflow) {
+      utils.workflow(options.workflow, function (err, workflow) {
+        if (err) {
+          return done(err);
+        }
+        var data = o.data;
+        var found = o.found;
+        var status = data.status;
+        var permits = workflow.permits;
+        var user = (found && found.user) || (o.user && o.user.id);
+        utils.toPermissions(user, permits[status], done);
+      });
+      return;
+    }
     utils.group('admin', function (err, admin) {
       if (err) {
         return done(err);
@@ -128,6 +164,20 @@ exports.permissions = function (options) {
 exports.visibility = function (options) {
   options = options || {};
   return function (o, done) {
+    if (options.workflow) {
+      utils.workflow(options.workflow, function (err, workflow) {
+        if (err) {
+          return done(err);
+        }
+        var data = o.data;
+        var found = o.found;
+        var status = data.status;
+        var permits = workflow.permits;
+        var user = (found && found.user) || (o.user && o.user.id);
+        utils.toVisibility(user, permits[status], done);
+      });
+      return;
+    }
     utils.group('admin', function (err, admin) {
       if (err) {
         return done(err);
