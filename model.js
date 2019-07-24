@@ -54,7 +54,6 @@ var validateQuery = function (ctx, done) {
   }
   var o;
   var path;
-  var filter;
   var value;
   var schema = ctx.model.schema;
   var paths = schema.paths;
@@ -83,6 +82,7 @@ var validateQuery = function (ctx, done) {
         return validated();
       }
       var oo = {
+        query: query,
         model: ctx.model,
         user: user,
         path: path,
@@ -91,6 +91,15 @@ var validateQuery = function (ctx, done) {
         id: o.id,
         options: o
       };
+      if (o.query) {
+        return o.query(oo, function (err, updated) {
+          if (err) {
+            return validated(err);
+          }
+          query[field] = updated;
+          validated();
+        });
+      }
       validator(oo, validated);
     };
 

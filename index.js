@@ -8,4 +8,6 @@ exports.requires = require('./requires');
 
 exports.types = require('./types');
 
+exports.queries = require('./queries');
+
 exports.model = require('./model');

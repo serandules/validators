@@ -402,7 +402,7 @@ exports.contacts = function (options) {
       if (err) {
         return done(unprocessableEntity('\'%s.email\' contains an invalid value', field));
       }
-      validatePhones(contacts.phones,function (err) {
+      validatePhones(contacts.phones, function (err) {
         if (err) {
           return done(unprocessableEntity('\'%s.phones\' contains an invalid value', field));
         }
