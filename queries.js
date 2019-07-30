@@ -23,7 +23,7 @@ exports.array = function (options) {
     var field = o.field;
     var allowed = options.allowed;
 
-    var keywords = ['$or', '$and'];
+    var keywords = ['$or', '$all'];
 
     var error = function () {
       return unprocessableEntity('\'%s\' contains an invalid value', field);
@@ -49,14 +49,14 @@ exports.array = function (options) {
             if (err) {
               return eachDone(err);
             }
-            av.push(value);
+            av.push({$elemMatch: value});
             eachDone();
           });
         }, function (err) {
           if (err) {
             return validated(err);
           }
-          validated(null, {$and: av});
+          validated(null, {$all: av});
         });
         return;
       }
@@ -77,11 +77,6 @@ exports.array = function (options) {
       });
     };
 
-    validate(value, function (err, value) {
-      if (err) {
-        return done(err);
-      }
-      done(null, {$elemMatch: value});
-    });
+    validate(value, done);
   }
 };
