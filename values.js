@@ -37,13 +37,10 @@ exports.tags = function (options) {
         return eachDone();
       }
       var tagger = options[field];
-      tagger(value, function (err, tagz) {
+      tagger(field, value, function (err, tagz) {
         if (err) {
           return eachDone(err);
         }
-        tagz.forEach(function (tag) {
-          tag.name = field + ':' + tag.name;
-        });
         tags = tags.concat(tagz);
         eachDone();
       });
