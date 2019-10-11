@@ -320,8 +320,23 @@ exports.binaryType = function (options) {
 
 exports.name = function (options) {
   options = options || {};
+  return exports.string(options);
+};
+
+exports.json = function (options) {
+  options = options || {};
   return function (o, done) {
-    done()
+    var json = o.value;
+    var field = options.field || o.field;
+    if (!json) {
+      return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+    }
+    json = JSON.stringify(json);
+    if (json.length > options.length) {
+      return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+    }
+    o.value = json;
+    done();
   };
 };
 
