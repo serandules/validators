@@ -45,3 +45,31 @@ exports.contacts = function (options) {
     done(unprocessableEntity('\'%s\' needs to be specified', field));
   };
 };
+
+exports.engine = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var options = o.options;
+    var field = options.field || o.field;
+    var data = o.data;
+    var fuel = data.fuel;
+    if (['none', 'other', 'electric'].indexOf(fuel) !== -1) {
+      return done()
+    }
+    done(unprocessableEntity('\'%s\' needs to be specified', field));
+  };
+};
+
+exports.driveType = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var options = o.options;
+    var field = options.field || o.field;
+    var data = o.data;
+    var driveType = data.driveType;
+    if (driveType === 'other') {
+      return done()
+    }
+    done(unprocessableEntity('\'%s\' needs to be specified', field));
+  };
+};
