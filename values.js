@@ -87,7 +87,11 @@ exports.status = function (options) {
 exports.createdAt = function (options) {
   options = options || {};
   return function (o, done) {
-    done(null, new Date());
+    var found = o.found;
+    if (!found) {
+      return done(null, new Date());
+    }
+    done(null, found.createdAt);
   };
 };
 
