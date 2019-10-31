@@ -95,6 +95,17 @@ exports.createdAt = function (options) {
   };
 };
 
+exports.updatedAt = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var found = o.found;
+    if (!found) {
+      return done(null, new Date());
+    }
+    done(null, found.updatedAt);
+  };
+};
+
 exports.groups = function (options) {
   options = options || {};
   return function (o, done) {

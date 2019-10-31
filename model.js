@@ -148,7 +148,7 @@ var validateSort = function (ctx, done) {
   var schema = ctx.model.schema;
   var paths = schema.paths;
   var search = ctx.search;
-  var sort = search.sort || {createdAt: -1, id: -1};
+  var sort = search.sort || {updatedAt: -1, id: -1};
   if (typeof sort !== 'object') {
     return done(errors.badRequest('\'data.sort\' contains an invalid value'));
   }
@@ -176,11 +176,11 @@ var validateSort = function (ctx, done) {
     }
     clone[sorter] = value;
   }
-  if (!clone.createdAt) {
-    clone.createdAt = -1
+  if (!clone.updatedAt) {
+    clone.updatedAt = -1
   }
   if (!clone._id) {
-    clone['_id'] = clone.createdAt;
+    clone['_id'] = clone.updatedAt;
   }
   search.sort = clone;
   validateCompounds(ctx, done);
