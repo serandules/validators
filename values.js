@@ -98,11 +98,14 @@ exports.createdAt = function (options) {
 exports.updatedAt = function (options) {
   options = options || {};
   return function (o, done) {
-    var found = o.found;
-    if (!found) {
-      return done(null, new Date());
+    var overrides = o.overrides;
+    if (overrides.updatedAt) {
+      return done(null, overrides.updatedAt);
     }
-    done(null, found.updatedAt);
+    if (o.found) {
+      return done(null, o.found.updatedAt);
+    }
+    done(null, new Date());
   };
 };
 
