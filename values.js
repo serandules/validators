@@ -88,10 +88,10 @@ exports.createdAt = function (options) {
   options = options || {};
   return function (o, done) {
     var found = o.found;
-    if (!found) {
-      return done(null, new Date());
+    if (found) {
+      return done(null, found.createdAt);
     }
-    done(null, found.createdAt);
+    done(null, new Date());
   };
 };
 
@@ -102,8 +102,9 @@ exports.updatedAt = function (options) {
     if (overrides.updatedAt) {
       return done(null, overrides.updatedAt);
     }
-    if (o.found) {
-      return done(null, o.found.updatedAt);
+    var found = o.found;
+    if (found) {
+      return done(null, found.updatedAt);
     }
     done(null, new Date());
   };
