@@ -797,14 +797,14 @@ exports.number = function (options) {
     if (typeof number !== 'number' && !(number instanceof Number)) {
       return done(unprocessableEntity('\'%s\' needs to be a number', field));
     }
+    if (options.integer && !Number.isInteger(number)) {
+      return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+    }
     if (options.enum) {
       if (options.enum.indexOf(number) !== -1) {
         return done()
       }
       return done(unprocessableEntity('\'%s\' contains an invalid value', field));
-    }
-    if (number.length > options.length) {
-      return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
     }
     if (options.max && number > options.max) {
       return done(unprocessableEntity('\'%s\' needs to be below or equal %s', field, options.max))
