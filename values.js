@@ -55,7 +55,7 @@ exports.user = function (options) {
   return function (o, done) {
     var user = o.user;
     if (!user) {
-      return done(errors.serverError());
+      return done();
     }
     var uid = o.found ? o.found.user : user.id;
     done(null, uid);
@@ -153,7 +153,7 @@ exports.permissions = function (options) {
         var status = data.status;
         var permits = workflow.permits;
         var user = (found && found.user) || (o.user && o.user.id);
-        utils.toPermissions(user, permits[status], done);
+        utils.toPermissions(user, permits[status], data, done);
       });
       return;
     }
@@ -190,7 +190,7 @@ exports.visibility = function (options) {
         var status = data.status;
         var permits = workflow.permits;
         var user = (found && found.user) || (o.user && o.user.id);
-        utils.toVisibility(user, permits[status], done);
+        utils.toVisibility(user, permits[status], data, done);
       });
       return;
     }

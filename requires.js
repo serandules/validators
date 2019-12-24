@@ -46,6 +46,25 @@ exports.contacts = function (options) {
   };
 };
 
+exports.messageAbout = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var options = o.options;
+    var field = options.field || o.field;
+    var data = o.data;
+    if (!data.model && !data.about) {
+      return done()
+    }
+    if (field === 'about') {
+      return data.model ? done() : done(unprocessableEntity('model needs to be specified with about'));
+    }
+    if (field === 'model') {
+      return data.about ? done() : done(unprocessableEntity('about needs to be specified with model'));
+    }
+    done(unprocessableEntity('\'%s\' needs to be specified', field));
+  };
+};
+
 exports.realEstateUsage = function (options) {
   options = options || {};
   return function (o, done) {
