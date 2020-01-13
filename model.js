@@ -574,7 +574,41 @@ exports.update = function (ctx, done) {
         return did(err);
       }
       ctx.data = data;
-      exports.create(ctx, did);
+      exports.create(ctx, function (err) {
+        if (err) {
+          return done(err);
+        }
+        var schema = ctx.model.schema;
+        var paths = schema.paths;
+        var found = ctx.found;
+        var args = Array.prototype.slice.call(arguments);
+        async.eachLimit(Object.keys(paths), 1, function (field, processed) {
+          var path = paths[field];
+          var options = path.options || {};
+          var verify = options.verify;
+          if (!verify) {
+            return processed();
+          }
+          if (found[field] === data.field) {
+            return processed();
+          }
+          var _ = data._ || found._;
+          if (!_) {
+            return processed();
+          }
+          var verified = _.verified;
+          if (!verified) {
+            return processed();
+          }
+          delete verified[field];
+          processed();
+        }, function (err) {
+          if (err) {
+            return done(err);
+          }
+          done.apply(null, args);
+        });
+      });
     });
   });
 };
