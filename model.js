@@ -585,11 +585,14 @@ exports.update = function (ctx, done) {
         async.eachLimit(Object.keys(paths), 1, function (field, processed) {
           var path = paths[field];
           var options = path.options || {};
+          if (!options.encrypted && found[field] && !data[field]) {
+            data[field] = null;
+          }
           var verify = options.verify;
           if (!verify) {
             return processed();
           }
-          if (found[field] === data.field) {
+          if (found[field] === data[field]) {
             return processed();
           }
           var _ = data._ || found._;

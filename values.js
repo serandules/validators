@@ -136,7 +136,21 @@ exports.random = function (options) {
 
 exports._ = function (options) {
   return function (o, done) {
-    done(null, {});
+    var oo = {};
+    var data = o.data;
+    var found = o.found;
+    if (!found) {
+      return done(null, oo);
+    }
+    var verified = found._ && found._.verified || {};
+    Object.keys(verified).forEach(function (field) {
+      if (found[field] !== data[field]) {
+        return
+      }
+      var v = oo.verified || (oo.verified = {});
+      v[field] = verified[field];
+    });
+    done(null, oo);
   };
 };
 

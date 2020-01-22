@@ -39,7 +39,7 @@ exports.contacts = function (options) {
     var options = o.options;
     var field = options.field || o.field;
     var data = o.data;
-    if (data.email || (data.phones && data.phones.length) || data.viber || data.whatsapp || data.messenger || data.skype) {
+    if (data.email || data.phone || data.viber || data.whatsapp || data.messenger || data.skype) {
       return done()
     }
     done(unprocessableEntity('\'%s\' needs to be specified', field));
