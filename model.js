@@ -561,6 +561,36 @@ exports.updatable = function (ctx, done) {
   });
 };
 
+exports.bumpable = function (ctx, done) {
+  if (ctx.found) {
+    return done();
+  }
+  var action = ctx.action;
+  ctx.action = 'bumpup';
+  exports.findOne(ctx, function (err) {
+    if (err) {
+      ctx.action = action;
+      return done(err);
+    }
+    var user = ctx.user;
+    if (!user) {
+      ctx.action = action;
+      return done(errors.unauthorized());
+    }
+    ctx.model.findOne(ctx.query, function (err, found) {
+      ctx.action = action;
+      if (err) {
+        return done(err);
+      }
+      if (!found) {
+        return done(errors.notFound());
+      }
+      ctx.found = utils.json(found);
+      done();
+    });
+  });
+};
+
 exports.update = function (ctx, done) {
   var did = function () {
     done.apply(null, Array.prototype.slice.call(arguments));
