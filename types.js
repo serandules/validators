@@ -318,6 +318,24 @@ exports.binaryType = function (options) {
   };
 };
 
+exports.username = function (options) {
+  options = options || {};
+  return function (o, done) {
+    return exports.string(options)(o, function (err) {
+      if (err) {
+        return done(err);
+      }
+      var value = o.value;
+      var field = options.field || o.field;
+      var regex = '^([a-z0-9]{1}[a-z0-9\\-]{0,' + (options.length - 2) + '}[a-z0-9]{1}|[a-z0-9]){1}$';
+      if (/^.*(\-)\1{1,}.*$/.test(value) || !RegExp(regex).test(value)) {
+        return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+      }
+      done();
+    });
+  };
+};
+
 exports.name = function (options) {
   options = options || {};
   return exports.string(options);
