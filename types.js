@@ -566,6 +566,9 @@ exports.password = function (options) {
       if (!/[A-Z]/.test(password)) {
         return done(unprocessableEntity('\'%s\' should contain at one upper case letter', field));
       }
+      if (!/[`~!@#$%^&*()\-_=+\[{\]}\\|;:'",<.>\/?\s]/.test(password)) {
+        return done(unprocessableEntity('\'%s\' should contain at one special character', field));
+      }
       done();
     });
   };
