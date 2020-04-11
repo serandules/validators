@@ -29,7 +29,7 @@ exports.stream = function (options) {
       if (!exists) {
         return done(unprocessableEntity('\'%s\' needs to be a stream', field));
       }
-      done();
+      done(null, value);
     });
   };
 };
@@ -152,7 +152,7 @@ exports.binaries = function (options) {
         if (min > length) {
           return done(unprocessableEntity('\'%s\' needs to contain more values', field));
         }
-        done();
+        done(null, value);
       });
     });
   };
@@ -185,7 +185,9 @@ exports.array = function (options) {
         value: v,
         options: o.options
       }, validated)
-    }, done);
+    }, function (err) {
+      done(err, array);
+    });
   };
 };
 
@@ -234,7 +236,7 @@ exports.groups = function (options) {
           if (!groupz || (groups.length !== groupz.length)) {
             return done(unprocessableEntity('\'%s\' contains invalid values', field));
           }
-          done();
+          done(null, groups);
         });
       });
     });
@@ -249,7 +251,7 @@ exports.ref = function (options) {
     if (!mongoose.Types.ObjectId.isValid(ref)) {
       return done(unprocessableEntity('\'%s\' needs to be a valid reference', field));
     }
-    done();
+    done(null, ref);
   };
 };
 
@@ -264,7 +266,7 @@ exports.boolean = function (options) {
     if (typeof boolean !== 'boolean' && !(boolean instanceof Boolean)) {
       return done(unprocessableEntity('\'%s\' needs to be a boolean', field));
     }
-    done();
+    done(null, boolean);
   };
 };
 
@@ -276,7 +278,7 @@ exports.url = function (options) {
     if (!url || url.length > 2000 || (url.indexOf('http://') === -1 && url.indexOf('https://') === -1)) {
       return done(unprocessableEntity('\'%s\' contains an invalid value', field));
     }
-    done();
+    done(null, url);
   };
 };
 
@@ -295,7 +297,9 @@ exports.cors = function (options) {
         value: url,
         field: field
       }, eachDone);
-    }, done);
+    }, function (err) {
+      done(err, urls);
+    });
   };
 };
 
@@ -314,7 +318,7 @@ exports.binaryType = function (options) {
     if (binaryTypes.indexOf(media) === -1) {
       return done(unprocessableEntity('\'%s\' contains an invalid value', field));
     }
-    done();
+    done(null, media);
   };
 };
 
@@ -328,10 +332,10 @@ exports.username = function (options) {
       var value = o.value;
       var field = options.field || o.field;
       var regex = '^([a-z0-9]{1}[a-z0-9\\-]{0,' + (options.length - 2) + '}[a-z0-9]{1}|[a-z0-9]){1}$';
-      if (/^.*(\-)\1{1,}.*$/.test(value) || !RegExp(regex).test(value)) {
+      if (/^.*(-)\1{1,}.*$/.test(value) || !RegExp(regex).test(value)) {
         return done(unprocessableEntity('\'%s\' contains an invalid value', field));
       }
-      done();
+      done(null, value);
     });
   };
 };
@@ -347,35 +351,34 @@ exports.json = function (options) {
     var json = o.value;
     var field = options.field || o.field;
     if (!json) {
-      return done(unprocessableEntity('\'%s\' contains an invalid value', field));
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
     }
     json = JSON.stringify(json);
     if (json.length > options.length) {
       return done(unprocessableEntity('\'%s\' contains an invalid value', field));
     }
-    o.value = json;
-    done();
+    done(null, json);
   };
 };
 
 exports.title = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    done(null, o.value);
   };
 };
 
 exports.color = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    done(null, o.value);
   };
 };
 
 exports.currency = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    done(null, o.value);
   };
 };
 
@@ -455,7 +458,7 @@ exports.contacts = function (options) {
                 if (err) {
                   return done(unprocessableEntity('\'%s.whatsapp\' contains an invalid value', field));
                 }
-                done();
+                done(null, contacts);
               });
             });
           });
@@ -474,7 +477,7 @@ exports.date = function (options) {
       return done(unprocessableEntity('\'%s\' needs to be specified', field));
     }
     if (date instanceof Date) {
-      return done();
+      return done(null, date);
     }
     var at;
     var type = typeof date;
@@ -486,7 +489,7 @@ exports.date = function (options) {
     if (!at) {
       return done(unprocessableEntity('\'%s\' needs to be a valid date', field));
     }
-    done();
+    done(null, date);
   };
 };
 
@@ -503,7 +506,7 @@ exports.email = function (options) {
     if (at === -1 || dot === -1 || dot < at) {
       return done(unprocessableEntity('\'%s\' needs to be a valid email address', field));
     }
-    done();
+    done(null, email);
   };
 };
 
@@ -518,7 +521,7 @@ exports.phone = function (options) {
     if (!/^\+[1-9]\d{1,14}$/.test(phone)) {
       return done(unprocessableEntity('\'%s\' needs to be a valid phone number', field));
     }
-    done();
+    done(null, phone);
   };
 };
 
@@ -566,10 +569,10 @@ exports.password = function (options) {
       if (!/[A-Z]/.test(password)) {
         return done(unprocessableEntity('\'%s\' should contain at one upper case letter', field));
       }
-      if (!/[`~!@#$%^&*()\-_=+\[{\]}\\|;:'",<.>\/?\s]/.test(password)) {
+      if (!/[`~!@#$%^&*()\-_=+[{\]}\\|;:'",<.>/?\s]/.test(password)) {
         return done(unprocessableEntity('\'%s\' should contain at one special character', field));
       }
-      done();
+      done(null, password);
     });
   };
 };
@@ -577,14 +580,14 @@ exports.password = function (options) {
 exports.birthday = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    done(null, o.value);
   };
 };
 
 exports.addresses = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    done(null, o.value);
   };
 };
 
@@ -596,14 +599,16 @@ exports.phones = function (options) {
       exports.phone({
         field: (options.field || o.field) + '[*]'
       })({value: phone}, validated);
-    }, done);
+    }, function (err) {
+      done(err, phones);
+    });
   };
 };
 
 exports.socials = function (options) {
   options = options || {};
   return function (o, done) {
-    done();
+    done(null, o.value);
   };
 };
 
@@ -619,7 +624,7 @@ exports.country = function (options) {
     if (allow.indexOf(country) === -1) {
       return done(unprocessableEntity('\'%s\' contains an invalid value', field))
     }
-    done();
+    done(null, country);
   };
 };
 
@@ -642,7 +647,7 @@ exports.status = function (options) {
       if (!transitions[status]) {
         return done(unprocessableEntity('\'%s\' contains an invalid value', field));
       }
-      done();
+      done(null, status);
     });
   };
 };
@@ -650,85 +655,80 @@ exports.status = function (options) {
 exports.permissions = function (options) {
   options = options || {};
   return function (o, done) {
-    var user = o.user;
-    if (!user) {
-      return done(errors.serverError());
-    }
-    var actions = options.actions;
-    var permissions = o.value;
-    var id = o.id;
     var field = options.field || o.field;
-    var i;
-    var entry;
-    var length = permissions.length;
-    var found = false;
-    for (i = 0; i < length; i++) {
-      entry = permissions[i];
-      if (!(entry.user || entry.group)) {
-        return done(unprocessableEntity('either \'%s[*].user\' or \'%s[*].group\' needs to be specified', field, field));
+    var permissions = o.value;
+    if (!permissions) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
+    var user = o.user;
+    utils.workflowActions(options.workflow, function (err, actions) {
+      if (err) {
+        return done(err);
       }
-      if (!Array.isArray(entry.actions)) {
-        return done(unprocessableEntity('\'%s\' needs to be an array', field + '.actions'));
+      var i;
+      var entry;
+      var id = o.id;
+      var length = permissions.length;
+      var found = false;
+      for (i = 0; i < length; i++) {
+        entry = permissions[i];
+        if (!(entry.user || entry.group)) {
+          return done(unprocessableEntity('either \'%s[*].user\' or \'%s[*].group\' needs to be specified', field, field));
+        }
+        if (!Array.isArray(entry.actions)) {
+          return done(unprocessableEntity('\'%s\' needs to be an array', field + '.actions'));
+        }
+        var valid = entry.actions.every(function (action) {
+          return actions.indexOf(action) !== -1;
+        });
+        if (!valid) {
+          return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.actions'));
+        }
+        if (!id) {
+          continue;
+        }
+        if (!user || user.id !== entry.user) {
+          continue;
+        }
+        if (!permissions.indexOf('read') || !permissions.indexOf('update')) {
+          return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
+        }
+        found = true;
       }
-      var valid = entry.actions.every(function (perm) {
-        return actions.indexOf(perm) !== -1;
-      });
-      if (!valid) {
-        return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.actions'));
-      }
-      if (!id) {
-        continue;
-      }
-      if (entry.user !== user.id) {
-        continue;
-      }
-      if (!permissions.indexOf('read') || !permissions.indexOf('update')) {
+      if (id && !found) {
         return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
       }
-      found = true;
-    }
-    if (id && !found) {
-      return done(unprocessableEntity('\'%s\' needs to contain permissions for the current user', field));
-    }
-    done();
+      done(null, permissions);
+    });
   };
 };
 
 exports.visibility = function (options) {
   options = options || {};
   return function (o, done) {
-    var user = o.user;
-    if (!user) {
-      return done(errors.serverError());
-    }
-    var actions = options.actions;
-    var visibility = o.value;
-    var id = o.id;
     var field = options.field || o.field;
-
-
+    var visibility = o.value;
+    if (!visibility) {
+      return done(unprocessableEntity('\'%s\' needs to be specified', field));
+    }
     var model = o.model;
     var schema = model.schema;
     var paths = schema.paths;
     Object.keys(visibility).every(function (vfield) {
       if (vfield !== '*' && !paths[vfield]) {
-        done(unprocessableEntity('\'%s\' contains an invalid value', field));
-        return;
+        return done(unprocessableEntity('\'%s\' contains an invalid value', field));
       }
       var entry = visibility[vfield];
       if (typeof entry !== 'object') {
-        done(unprocessableEntity('\'%s.%s\' contains an invalid value', field, vfield));
-        return;
+        return done(unprocessableEntity('\'%s.%s\' contains an invalid value', field, vfield));
       }
       Object.keys(entry).every(function (entryKey) {
-        if (entryKey !== 'user' && entryKey !== 'group') {
-          done(unprocessableEntity('\'%s.%s\' contains an invalid value', field, vfield));
-          return;
+        if (entryKey !== 'users' && entryKey !== 'groups') {
+          return done(unprocessableEntity('\'%s.%s\' contains an invalid value', field, vfield));
         }
         var ids = entry[entryKey];
-        if (Array.isArray(ids)) {
-          done(unprocessableEntity('\'%s.%s.%s\' contains an invalid value', field, vfield, entryKey));
-          return;
+        if (!Array.isArray(ids)) {
+          return done(unprocessableEntity('\'%s.%s.%s\' contains an invalid value', field, vfield, entryKey));
         }
         ids.every(function (id, i) {
           if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -737,7 +737,76 @@ exports.visibility = function (options) {
         });
       });
     });
-    done();
+    done(null, visibility);
+  };
+};
+
+exports._ = function (options) {
+  options = options || {};
+  return function (o, done) {
+    var value = o.value;
+    if (!value) {
+      return done();
+    }
+    var visibility = value.visibility;
+    if (!visibility) {
+      return done(null, value);
+    }
+    utils.workflow(options.workflow, function (err, workflow) {
+      if (err) {
+        return done(err);
+      }
+      if (!workflow) {
+        return done(new Error('!workflow'));
+      }
+      utils.group('admin', function (err, admin) {
+        if (err) {
+          return done(err);
+        }
+        var i;
+        var id;
+        var ids;
+        var status;
+        var fields;
+        var length;
+        var index = {};
+        var schema = o.model.schema;
+        var paths = Object.keys(schema.paths);
+        var permits = workflow.permits;
+        paths.forEach(function (path) {
+          index[path] = true;
+        });
+        var field = options.field || o.field;
+        for (status in visibility) {
+          if (!visibility.hasOwnProperty(status)) {
+            continue;
+          }
+          if (!permits[status]) {
+            return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.visibility'));
+          }
+          ids = visibility[status];
+          for (id in ids) {
+            if (!ids.hasOwnProperty(id)) {
+              continue;
+            }
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+              return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.visibility'));
+            }
+            if (admin.id === id) {
+              return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.visibility'));
+            }
+            fields = ids[id];
+            length = fields.length;
+            for (i = 0; i < length; i++) {
+              if (!index[fields[i]]) {
+                return done(unprocessableEntity('\'%s\' contains an invalid value', field + '.visibility'))
+              }
+            }
+          }
+        }
+        done(null, value);
+      });
+    });
   };
 };
 
@@ -779,7 +848,7 @@ exports.tags = function (options) {
         return done(unprocessableEntity('\'%s\' needs to be a string', o.field + '.value'));
       }
     }
-    done();
+    done(null, tags);
   };
 };
 
@@ -796,14 +865,14 @@ exports.string = function (options) {
     }
     if (options.enum) {
       if (options.enum.indexOf(string) !== -1) {
-        return done()
+        return done(null, string);
       }
       return done(unprocessableEntity('\'%s\' contains an invalid value', field));
     }
     if (string.length > options.length) {
       return done(unprocessableEntity('\'%s\' exceeds the allowed length', field));
     }
-    return done();
+    done(null, string);
   };
 };
 
@@ -823,7 +892,7 @@ exports.number = function (options) {
     }
     if (options.enum) {
       if (options.enum.indexOf(number) !== -1) {
-        return done()
+        return done(null, number);
       }
       return done(unprocessableEntity('\'%s\' contains an invalid value', field));
     }
@@ -833,6 +902,6 @@ exports.number = function (options) {
     if (options.min && number < options.min) {
       return done(unprocessableEntity('\'%s\' needs to be above or equal %s', field, options.min))
     }
-    return done();
+    done(null, number);
   };
 };

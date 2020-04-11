@@ -165,9 +165,8 @@ exports.permissions = function (options) {
         var data = o.data;
         var found = o.found;
         var status = data.status;
-        var permits = workflow.permits;
         var user = (found && found.user) || (o.user && o.user.id);
-        utils.toPermissions(user, permits[status], data, done);
+        utils.toPermissions(user, workflow, status, data, done);
       });
       return;
     }
@@ -202,9 +201,8 @@ exports.visibility = function (options) {
         var data = o.data;
         var found = o.found;
         var status = data.status;
-        var permits = workflow.permits;
         var user = (found && found.user) || (o.user && o.user.id);
-        utils.toVisibility(user, permits[status], data, done);
+        utils.toVisibility(user, workflow, status, data, done);
       });
       return;
     }

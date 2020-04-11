@@ -100,7 +100,13 @@ var validateQuery = function (ctx, done) {
           validated();
         });
       }
-      validator(oo, validated);
+      validator(oo, function (err, value) {
+        if (err) {
+          return validated();
+        }
+        oo.value = value;
+        validated();
+      });
     };
 
     var validateIn = function (val, validated) {
@@ -222,10 +228,11 @@ var validateCursor = function (ctx, done) {
     if (!validator) {
       return validated();
     }
-    validator(o, function (err) {
+    validator(o, function (err, value) {
       if (err) {
         return validated(errors.badRequest('data.cursor.%s', err.message));
       }
+      o.value = value;
       validated();
     });
   }, function (err) {
@@ -345,27 +352,48 @@ exports.create = function (ctx, done) {
 
     var hybrid = options.hybrid;
 
+    var validateIt = function (validated) {
+      var validator = options.validator;
+      if (!validator) {
+        encrypt(options, o.value, function (err, value) {
+          if (err) {
+            return validated(err);
+          }
+          data[field] = value;
+          validated();
+        });
+        return;
+      }
+      validator(o, function (err, value) {
+        if (err) {
+          return validated(err);
+        }
+        encrypt(options, value, function (err, value) {
+          if (err) {
+            return validated(err);
+          }
+          data[field] = value;
+          validated();
+        });
+      });
+    };
+
     if (hybrid) {
       value = options.value;
       if (!value) {
-        return end();
+        return end(new Error('!value'));
       }
       value(o, function (err, sv) {
         if (err) {
           return end(err);
         }
         var cv = data[field] || [];
-        encrypt(options, sv, function (err, sv) {
+        hybrid(o, sv, cv, function (err, values) {
           if (err) {
             return end(err);
           }
-          hybrid(o, sv, cv, function (err, values) {
-            if (err) {
-              return end(err);
-            }
-            data[field] = values;
-            end();
-          });
+          o.value = values;
+          validateIt(end);
         });
       });
       return;
@@ -403,31 +431,7 @@ exports.create = function (ctx, done) {
       return end();
     }
 
-    var validator = options.validator;
-
-    if (!validator) {
-      encrypt(options, o.value, function (err, value) {
-        if (err) {
-          return end(err);
-        }
-        data[field] = value;
-        end();
-      });
-      return;
-    }
-
-    validator(o, function (err) {
-      if (err) {
-        return end(err);
-      }
-      encrypt(options, o.value, function (err, value) {
-        if (err) {
-          return end(err);
-        }
-        data[field] = value;
-        end();
-      });
-    });
+    validateIt(end);
   };
 
   var findContext = function (field) {
@@ -486,6 +490,7 @@ exports.create = function (ctx, done) {
       var o = {
         user: user,
         path: path,
+        model: ctx.model,
         field: field,
         value: data[field],
         id: options.id,

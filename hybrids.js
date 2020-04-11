@@ -93,3 +93,16 @@ exports.visibility = function (options) {
     done(null, visibility);
   };
 };
+
+exports._ = function (options) {
+  options = options || {};
+  return function (o, server, client, done) {
+    if (options.server) {
+      return done(null, server);
+    }
+    if (client.visibility) {
+      server.visibility = client.visibility;
+    }
+    done(null, server);
+  };
+};
