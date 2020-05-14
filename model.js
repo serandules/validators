@@ -215,7 +215,7 @@ var validateCursor = function (ctx, done) {
     }
     value = cursor[field];
     if (!value) {
-      return validated(errors.badRequest('\'data.cursor.%s\' + contains an invalid value', field));
+      return validated(errors.badRequest('\'data.cursor.%s' + field + '\' contains an invalid value'));
     }
     var options = path.options || {};
     var o = {
@@ -230,7 +230,7 @@ var validateCursor = function (ctx, done) {
     }
     validator(o, function (err, value) {
       if (err) {
-        return validated(errors.badRequest('data.cursor.%s', err.message));
+        return validated(errors.badRequest('data.cursor.' + err.message));
       }
       o.value = value;
       validated();
