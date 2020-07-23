@@ -518,12 +518,8 @@ exports.findOne = function (ctx, done) {
     ctx.validated = true;
     done.apply(null, Array.prototype.slice.call(arguments));
   };
-  var id = ctx.id;
-  if (!model.objectId(id)) {
-    return did(errors.notFound());
-  }
   var query = {
-    _id: id
+    _id: ctx.id
   };
   var action = ctx.action || 'read';
   commons.permitOnly(ctx, query, {$in: ['*', action]}, function (err) {
